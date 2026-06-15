@@ -1,6 +1,42 @@
 # The Herta Voice Assistant
 
-Локальный голосовой ассистент в образе Великой Герты из Honkai: Star Rail. **Текущая версия: v0.3.**
+Локальный голосовой ассистент в образе Великой Герты из Honkai: Star Rail.
+
+> ## ⚙️ Идёт порт на Rust (ветка `rust-by-default`)
+>
+> Проект мигрирует с Python на **Rust** ради производительности, единого бинаря и
+> кроссплатформенной сборки. Новый код живёт в Cargo-воркспейсе `crates/`.
+> Python-версия пока сохраняется для совместимости, но является устаревшей.
+>
+> **Быстрый старт (Rust):**
+> ```bash
+> cargo build --release            # собрать
+> cargo run -p herta-cli           # запустить TUI
+> cargo run -p herta-cli -- --text "Кто ты?"   # одноразовый запрос
+> cargo run -p herta-cli -- doctor # самодиагностика
+> cargo test                       # тесты
+> ```
+>
+> **Архитектура воркспейса:**
+>
+> | Crate | Ответственность |
+> |-------|-----------------|
+> | `herta-core` | ошибки, сообщения, конфиг, персона+лор, память, автосжатие контекста |
+> | `herta-llm` | трейт `ChatClient` + Ollama / OpenAI-совместимые / Google AI |
+> | `herta-tools` | реестр инструментов, память, веб-поиск, анализ кода, системные действия |
+> | `herta-agent` | оркестрация саб-агентов («марионеток») через tokio |
+> | `herta-tui` | современный TUI на ratatui/crossterm с панелью агентов |
+> | `herta-cli` | бинарь `herta` (TUI / `--text` / `doctor`) |
+>
+> Подробности: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) ·
+> досье персонажа: [`docs/HERTA.md`](docs/HERTA.md).
+>
+> **Релизы** собираются GitHub Actions при пуше тега `v*` под Windows, macOS,
+> Linux (tarball + `.deb` + AUR PKGBUILD + Nix flake) и Android (best-effort).
+
+---
+
+## Python-версия (устаревшая) — v0.3
 
 Работает на **Windows** и **Linux**. Ниже даны отдельные пошаговые инструкции для каждой системы.
 

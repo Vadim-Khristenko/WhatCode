@@ -21,16 +21,28 @@ pub struct ChatLine {
 
 impl ChatLine {
     pub fn user(text: impl Into<String>) -> Self {
-        Self { kind: LineKind::User, text: text.into() }
+        Self {
+            kind: LineKind::User,
+            text: text.into(),
+        }
     }
     pub fn herta(text: impl Into<String>) -> Self {
-        Self { kind: LineKind::Herta, text: text.into() }
+        Self {
+            kind: LineKind::Herta,
+            text: text.into(),
+        }
     }
     pub fn notice(text: impl Into<String>) -> Self {
-        Self { kind: LineKind::Notice, text: text.into() }
+        Self {
+            kind: LineKind::Notice,
+            text: text.into(),
+        }
     }
     pub fn error(text: impl Into<String>) -> Self {
-        Self { kind: LineKind::ErrorNote, text: text.into() }
+        Self {
+            kind: LineKind::ErrorNote,
+            text: text.into(),
+        }
     }
 }
 
@@ -71,7 +83,11 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(provider_label: impl Into<String>, model_label: impl Into<String>, context_limit: usize) -> Self {
+    pub fn new(
+        provider_label: impl Into<String>,
+        model_label: impl Into<String>,
+        context_limit: usize,
+    ) -> Self {
         Self {
             lines: vec![ChatLine::notice(
                 "Великая Герта на связи. Печатайте запрос и жмите Enter. F1 — справка.",
@@ -97,7 +113,13 @@ impl AppState {
     }
 
     /// Обновить или вставить представление агента по событию.
-    pub fn upsert_agent(&mut self, id: &str, title: Option<String>, status: AgentStatus, preview: Option<String>) {
+    pub fn upsert_agent(
+        &mut self,
+        id: &str,
+        title: Option<String>,
+        status: AgentStatus,
+        preview: Option<String>,
+    ) {
         if let Some(agent) = self.agents.iter_mut().find(|a| a.id == id) {
             agent.status = status;
             if let Some(t) = title {

@@ -18,7 +18,9 @@ pub struct GoogleAiClient {
 
 impl std::fmt::Debug for GoogleAiClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("GoogleAiClient").field("model", &self.config.model).finish()
+        f.debug_struct("GoogleAiClient")
+            .field("model", &self.config.model)
+            .finish()
     }
 }
 
@@ -46,7 +48,11 @@ impl GoogleAiClient {
                 }
             }
         }
-        let system = if system_parts.is_empty() { None } else { Some(system_parts.join("\n\n")) };
+        let system = if system_parts.is_empty() {
+            None
+        } else {
+            Some(system_parts.join("\n\n"))
+        };
         (system, contents)
     }
 
@@ -99,7 +105,10 @@ impl GoogleAiClient {
                 }
                 let retryable = is_retryable_status(status);
                 let text = resp.text().await.unwrap_or_default();
-                Err((retryable, HertaError::llm("google_ai", format!("HTTP {status}: {text}"))))
+                Err((
+                    retryable,
+                    HertaError::llm("google_ai", format!("HTTP {status}: {text}")),
+                ))
             }
         })
         .await?;
@@ -108,7 +117,10 @@ impl GoogleAiClient {
     }
 
     fn extract_text(value: &Value) -> String {
-        let Some(parts) = value.pointer("/candidates/0/content/parts").and_then(Value::as_array) else {
+        let Some(parts) = value
+            .pointer("/candidates/0/content/parts")
+            .and_then(Value::as_array)
+        else {
             return String::new();
         };
         let joined: String = parts

@@ -41,7 +41,10 @@ impl StoredMessage {
             Role::Assistant => "assistant",
             _ => return None,
         };
-        Some(Self { role: role.to_string(), content: content.to_string() })
+        Some(Self {
+            role: role.to_string(),
+            content: content.to_string(),
+        })
     }
 }
 
@@ -55,8 +58,18 @@ pub struct DialogueMemory {
 }
 
 impl DialogueMemory {
-    pub fn new(path: impl Into<PathBuf>, max_messages: usize, context_messages: usize, enabled: bool) -> Self {
-        Self { path: path.into(), max_messages: max_messages.max(2), context_messages, enabled }
+    pub fn new(
+        path: impl Into<PathBuf>,
+        max_messages: usize,
+        context_messages: usize,
+        enabled: bool,
+    ) -> Self {
+        Self {
+            path: path.into(),
+            max_messages: max_messages.max(2),
+            context_messages,
+            enabled,
+        }
     }
 
     fn read_all(&self) -> Vec<StoredMessage> {
@@ -66,7 +79,9 @@ impl DialogueMemory {
         let Ok(raw) = std::fs::read_to_string(&self.path) else {
             return Vec::new();
         };
-        serde_json::from_str::<MemoryFile>(&raw).map(|f| f.messages).unwrap_or_default()
+        serde_json::from_str::<MemoryFile>(&raw)
+            .map(|f| f.messages)
+            .unwrap_or_default()
     }
 
     /// Последние `context_messages` сообщений. Гарантирует, что срез начинается
@@ -76,7 +91,10 @@ impl DialogueMemory {
             return Vec::new();
         }
         let stored = self.read_all();
-        let mut messages: Vec<Message> = stored.into_iter().filter_map(StoredMessage::into_message).collect();
+        let mut messages: Vec<Message> = stored
+            .into_iter()
+            .filter_map(StoredMessage::into_message)
+            .collect();
 
         if messages.len() > self.context_messages {
             messages.drain(0..messages.len() - self.context_messages);
@@ -111,7 +129,10 @@ impl DialogueMemory {
                 std::fs::create_dir_all(parent)?;
             }
         }
-        let file = MemoryFile { version: 1, messages: messages.to_vec() };
+        let file = MemoryFile {
+            version: 1,
+            messages: messages.to_vec(),
+        };
         let raw = serde_json::to_string_pretty(&file)?;
         std::fs::write(&self.path, raw).map_err(HertaError::Io)
     }

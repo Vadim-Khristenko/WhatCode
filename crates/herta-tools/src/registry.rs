@@ -65,7 +65,10 @@ impl ToolRegistry {
     /// (когда они запрещены) возвращают `ToolResult` с `executed = false`.
     pub async fn dispatch(&self, call: &ToolCall) -> ToolResult {
         let Some(tool) = self.tools.get(&call.name) else {
-            return ToolResult::rejected(call.name.clone(), format!("инструмент `{}` не найден", call.name));
+            return ToolResult::rejected(
+                call.name.clone(),
+                format!("инструмент `{}` не найден", call.name),
+            );
         };
         let spec = tool.spec();
         if spec.destructive && !self.allow_destructive {
@@ -92,7 +95,12 @@ mod tests {
             ToolSpec::new(
                 "echo",
                 "Вернуть переданный текст",
-                vec![ToolParameter::new("text", ParamType::String, "что вернуть", true)],
+                vec![ToolParameter::new(
+                    "text",
+                    ParamType::String,
+                    "что вернуть",
+                    true,
+                )],
             )
         }
         async fn call(&self, call: &ToolCall) -> ToolResult {
@@ -117,14 +125,32 @@ mod tests {
         let mut reg = ToolRegistry::new();
         reg.register(Arc::new(Echo)).register(Arc::new(Nuke));
 
-        let echo = reg.dispatch(&ToolCall { id: "1".into(), name: "echo".into(), arguments: json!({"text":"привет"}) }).await;
+        let echo = reg
+            .dispatch(&ToolCall {
+                id: "1".into(),
+                name: "echo".into(),
+                arguments: json!({"text":"привет"}),
+            })
+            .await;
         assert!(echo.executed);
         assert_eq!(echo.message, "привет");
 
-        let nuke = reg.dispatch(&ToolCall { id: "2".into(), name: "nuke".into(), arguments: json!({}) }).await;
+        let nuke = reg
+            .dispatch(&ToolCall {
+                id: "2".into(),
+                name: "nuke".into(),
+                arguments: json!({}),
+            })
+            .await;
         assert!(!nuke.executed);
 
-        let missing = reg.dispatch(&ToolCall { id: "3".into(), name: "ghost".into(), arguments: json!({}) }).await;
+        let missing = reg
+            .dispatch(&ToolCall {
+                id: "3".into(),
+                name: "ghost".into(),
+                arguments: json!({}),
+            })
+            .await;
         assert!(!missing.executed);
     }
 }

@@ -67,7 +67,12 @@ impl Tool for OpenUrlTool {
         ToolSpec::new(
             "open_url",
             "Открыть URL в браузере по умолчанию.",
-            vec![ToolParameter::new("url", ParamType::String, "Адрес для открытия", false)],
+            vec![ToolParameter::new(
+                "url",
+                ParamType::String,
+                "Адрес для открытия",
+                false,
+            )],
         )
     }
 
@@ -75,11 +80,17 @@ impl Tool for OpenUrlTool {
         if !self.config.enabled {
             return ToolResult::rejected("open_url", "системные действия отключены");
         }
-        let url = call.arg_str("url").unwrap_or_else(|| self.config.browser_home_url.clone());
+        let url = call
+            .arg_str("url")
+            .unwrap_or_else(|| self.config.browser_home_url.clone());
         if !(url.starts_with("http://") || url.starts_with("https://")) {
             return ToolResult::rejected("open_url", "разрешены только http(s)-ссылки");
         }
-        match open_command(&url).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
+        match open_command(&url)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+        {
             Ok(_) => ToolResult::ok("open_url", format!("Открываю: {url}")),
             Err(e) => ToolResult::rejected("open_url", format!("не удалось открыть: {e}")),
         }
@@ -132,7 +143,10 @@ impl Tool for CreateNoteTool {
         }
         let content = call.arg_str("content").unwrap_or_default();
         match tokio::fs::write(&path, content).await {
-            Ok(_) => ToolResult::ok("create_note", format!("Создала заметку: {}", path.display())),
+            Ok(_) => ToolResult::ok(
+                "create_note",
+                format!("Создала заметку: {}", path.display()),
+            ),
             Err(e) => ToolResult::rejected("create_note", format!("не удалось записать: {e}")),
         }
     }

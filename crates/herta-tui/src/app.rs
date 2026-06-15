@@ -7,14 +7,20 @@ use crate::state::{AppState, ChatLine, Focus};
 use crate::theme::Theme;
 use crate::ui;
 use crossterm::event::{
-    DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
+    DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode, KeyEvent, KeyEventKind,
+    KeyModifiers,
 };
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::execute;
+use crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+};
 use futures::StreamExt;
 use herta_agent::{AgentEvent, AgentStatus, AgentTask, Supervisor};
-use herta_core::{estimate_total_tokens, CompactionDecision, CompactionPlan, ContextManager, HertaError, Message, Result};
 use herta_core::persona;
+use herta_core::{
+    estimate_total_tokens, CompactionDecision, CompactionPlan, ContextManager, HertaError, Message,
+    Result,
+};
 use herta_llm::ChatClient;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
@@ -56,7 +62,8 @@ impl App {
     ) -> Self {
         let provider = client.provider_name().to_string();
         let model = client.model_name().to_string();
-        let conversation = persona::build_bootstrap_messages(Some(&model), long_memory_block.as_deref());
+        let conversation =
+            persona::build_bootstrap_messages(Some(&model), long_memory_block.as_deref());
 
         let (backend_tx, backend_rx) = mpsc::unbounded_channel();
         let (agent_tx, agent_rx) = mpsc::unbounded_channel();
@@ -87,7 +94,10 @@ impl App {
         result
     }
 
-    async fn event_loop(&mut self, terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
+    async fn event_loop(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    ) -> Result<()> {
         let mut events = EventStream::new();
         let mut ticker = tokio::time::interval(std::time::Duration::from_millis(120));
 
@@ -205,7 +215,9 @@ impl App {
 
         // Возможная разговорная подсказка добавляется как системная реплика.
         let mut request = self.conversation.clone();
-        if let Some(hint) = persona::build_conversational_hint(request.last().map(|m| m.content.as_str()).unwrap_or("")) {
+        if let Some(hint) = persona::build_conversational_hint(
+            request.last().map(|m| m.content.as_str()).unwrap_or(""),
+        ) {
             request.push(Message::system(hint));
         }
 
@@ -224,7 +236,9 @@ impl App {
     }
 
     fn handle_command(&mut self, command: &str) {
-        let (head, tail) = command.split_once(char::is_whitespace).unwrap_or((command, ""));
+        let (head, tail) = command
+            .split_once(char::is_whitespace)
+            .unwrap_or((command, ""));
         match head {
             "quit" | "q" | "exit" => self.state.should_quit = true,
             "clear" => {
@@ -234,13 +248,15 @@ impl App {
             "agent" => {
                 let task_text = tail.trim();
                 if task_text.is_empty() {
-                    self.state.push_line(ChatLine::notice("Использование: /agent <описание задачи>"));
+                    self.state
+                        .push_line(ChatLine::notice("Использование: /agent <описание задачи>"));
                 } else {
                     self.spawn_agent(task_text);
                 }
             }
             other => {
-                self.state.push_line(ChatLine::notice(format!("Неизвестная команда: /{other}")));
+                self.state
+                    .push_line(ChatLine::notice(format!("Неизвестная команда: /{other}")));
             }
         }
     }
@@ -248,8 +264,11 @@ impl App {
     fn spawn_agent(&mut self, task_text: &str) {
         let title: String = task_text.chars().take(28).collect();
         let task = AgentTask::new(title.clone(), task_text.to_string());
-        self.state.upsert_agent(&task.id, Some(title), AgentStatus::Pending, None);
-        self.state.push_line(ChatLine::notice(format!("Марионетка отправлена: {task_text}")));
+        self.state
+            .upsert_agent(&task.id, Some(title), AgentStatus::Pending, None);
+        self.state.push_line(ChatLine::notice(format!(
+            "Марионетка отправлена: {task_text}"
+        )));
         self.supervisor.spawn(task, self.agent_tx.clone());
     }
 
@@ -271,7 +290,8 @@ impl App {
                 self.maybe_compact();
             }
             Backend::ReplyError(err) => {
-                self.state.push_line(ChatLine::error(format!("Сбой запроса: {err}")));
+                self.state
+                    .push_line(ChatLine::error(format!("Сбой запроса: {err}")));
                 self.state.busy = false;
                 self.state.status = "ошибка".into();
             }
@@ -279,7 +299,9 @@ impl App {
                 self.conversation = ContextManager::apply(&self.conversation, &plan, &text);
                 self.state.busy = false;
                 self.state.status = "контекст сжат".into();
-                self.state.push_line(ChatLine::notice("Контекст автоматически сжат для экономии окна."));
+                self.state.push_line(ChatLine::notice(
+                    "Контекст автоматически сжат для экономии окна.",
+                ));
                 self.recompute_context();
             }
             Backend::SummaryError(err) => {
@@ -292,18 +314,28 @@ impl App {
     fn handle_agent_event(&mut self, ev: AgentEvent) {
         match ev {
             AgentEvent::Started { id, title } => {
-                self.state.upsert_agent(&id, Some(title), AgentStatus::Running, Some("работает…".into()));
+                self.state.upsert_agent(
+                    &id,
+                    Some(title),
+                    AgentStatus::Running,
+                    Some("работает…".into()),
+                );
             }
             AgentEvent::Chunk { id, text } => {
-                self.state.upsert_agent(&id, None, AgentStatus::Running, Some(preview(&text)));
+                self.state
+                    .upsert_agent(&id, None, AgentStatus::Running, Some(preview(&text)));
             }
             AgentEvent::Completed { id, output } => {
-                self.state.upsert_agent(&id, None, AgentStatus::Done, Some(preview(&output)));
-                self.state.push_line(ChatLine::herta(format!("[марионетка] {output}")));
+                self.state
+                    .upsert_agent(&id, None, AgentStatus::Done, Some(preview(&output)));
+                self.state
+                    .push_line(ChatLine::herta(format!("[марионетка] {output}")));
             }
             AgentEvent::Failed { id, error } => {
-                self.state.upsert_agent(&id, None, AgentStatus::Error, Some(preview(&error)));
-                self.state.push_line(ChatLine::error(format!("[марионетка] сбой: {error}")));
+                self.state
+                    .upsert_agent(&id, None, AgentStatus::Error, Some(preview(&error)));
+                self.state
+                    .push_line(ChatLine::error(format!("[марионетка] сбой: {error}")));
             }
         }
     }
@@ -343,15 +375,22 @@ fn preview(text: &str) -> String {
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<Stdout>>> {
     enable_raw_mode().map_err(|e| HertaError::Tui(e.to_string()))?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture).map_err(|e| HertaError::Tui(e.to_string()))?;
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
+        .map_err(|e| HertaError::Tui(e.to_string()))?;
     let backend = CrosstermBackend::new(stdout);
     Terminal::new(backend).map_err(|e| HertaError::Tui(e.to_string()))
 }
 
 fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
     disable_raw_mode().map_err(|e| HertaError::Tui(e.to_string()))?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )
+    .map_err(|e| HertaError::Tui(e.to_string()))?;
+    terminal
+        .show_cursor()
         .map_err(|e| HertaError::Tui(e.to_string()))?;
-    terminal.show_cursor().map_err(|e| HertaError::Tui(e.to_string()))?;
     Ok(())
 }

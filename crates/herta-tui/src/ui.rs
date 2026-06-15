@@ -47,7 +47,9 @@ pub fn render(frame: &mut Frame, state: &AppState, theme: &Theme) {
 }
 
 fn render_header(frame: &mut Frame, area: Rect, state: &AppState, theme: &Theme) {
-    let block = Block::default().borders(Borders::ALL).border_style(theme.border(false));
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(theme.border(false));
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -74,7 +76,10 @@ fn render_body(frame: &mut Frame, area: Rect, state: &AppState, theme: &Theme) {
             .constraints([Constraint::Min(20), Constraint::Length(34)])
             .split(area)
     } else {
-        Layout::default().direction(Direction::Horizontal).constraints([Constraint::Min(20)]).split(area)
+        Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Min(20)])
+            .split(area)
     };
 
     render_transcript(frame, cols[0], state, theme);
@@ -96,9 +101,17 @@ fn render_transcript(frame: &mut Frame, area: Rect, state: &AppState, theme: &Th
     for entry in &state.lines {
         let (label, label_style, body_style) = match entry.kind {
             LineKind::User => ("Вы", theme.user_label(), Style::default().fg(theme.text)),
-            LineKind::Herta => ("Герта", theme.herta_label(), Style::default().fg(theme.text)),
+            LineKind::Herta => (
+                "Герта",
+                theme.herta_label(),
+                Style::default().fg(theme.text),
+            ),
             LineKind::Notice => ("·", theme.dim(), theme.dim()),
-            LineKind::ErrorNote => ("!", Style::default().fg(theme.error), Style::default().fg(theme.error)),
+            LineKind::ErrorNote => (
+                "!",
+                Style::default().fg(theme.error),
+                Style::default().fg(theme.error),
+            ),
         };
         // Заголовок реплики.
         if matches!(entry.kind, LineKind::User | LineKind::Herta) {
@@ -114,12 +127,22 @@ fn render_transcript(frame: &mut Frame, area: Rect, state: &AppState, theme: &Th
     let viewport = inner.height;
     let total: u16 = lines
         .iter()
-        .map(|l| wrapped_rows(&l.spans.iter().map(|s| s.content.as_ref()).collect::<String>(), inner.width))
+        .map(|l| {
+            wrapped_rows(
+                &l.spans
+                    .iter()
+                    .map(|s| s.content.as_ref())
+                    .collect::<String>(),
+                inner.width,
+            )
+        })
         .sum::<u16>();
     let max_offset = total.saturating_sub(viewport);
     let offset = max_offset.saturating_sub(state.scroll_back);
 
-    let para = Paragraph::new(Text::from(lines)).wrap(Wrap { trim: false }).scroll((offset, 0));
+    let para = Paragraph::new(Text::from(lines))
+        .wrap(Wrap { trim: false })
+        .scroll((offset, 0));
     frame.render_widget(para, inner);
 }
 
@@ -144,7 +167,10 @@ fn render_agents(frame: &mut Frame, area: Rect, state: &AppState, theme: &Theme)
             Span::styled(agent.title.clone(), Style::default().fg(theme.text)),
         ]));
         if !agent.preview.is_empty() {
-            lines.push(Line::from(Span::styled(format!("  {}", agent.preview), theme.dim())));
+            lines.push(Line::from(Span::styled(
+                format!("  {}", agent.preview),
+                theme.dim(),
+            )));
         }
     }
     let para = Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true });
@@ -153,7 +179,11 @@ fn render_agents(frame: &mut Frame, area: Rect, state: &AppState, theme: &Theme)
 
 fn render_input(frame: &mut Frame, area: Rect, state: &AppState, theme: &Theme) {
     let focused = state.focus == Focus::Input;
-    let hint = if state.busy { " Герта размышляет… " } else { " Ввод (Enter — отправить) " };
+    let hint = if state.busy {
+        " Герта размышляет… "
+    } else {
+        " Ввод (Enter — отправить) "
+    };
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(theme.border(focused))
@@ -169,7 +199,10 @@ fn render_input(frame: &mut Frame, area: Rect, state: &AppState, theme: &Theme) 
 
     // Каретка в позиции ввода (только в фокусе и не во время запроса).
     if focused && !state.busy {
-        let cursor_x = inner.x.saturating_add(2).saturating_add(state.input.chars().count() as u16);
+        let cursor_x = inner
+            .x
+            .saturating_add(2)
+            .saturating_add(state.input.chars().count() as u16);
         let cursor_x = cursor_x.min(inner.x + inner.width.saturating_sub(1));
         frame.set_cursor_position((cursor_x, inner.y));
     }
@@ -199,7 +232,10 @@ fn render_status(frame: &mut Frame, area: Rect, state: &AppState, theme: &Theme)
     let gauge = Gauge::default()
         .gauge_style(gauge_style)
         .ratio(ratio as f64)
-        .label(format!("ctx {}/{}", state.context_used, state.context_limit));
+        .label(format!(
+            "ctx {}/{}",
+            state.context_used, state.context_limit
+        ));
     frame.render_widget(gauge, cols[1]);
 }
 
@@ -210,7 +246,12 @@ pub fn render_help(frame: &mut Frame, theme: &Theme) {
     let h = 14u16.min(area.height.saturating_sub(2));
     let x = area.x + (area.width.saturating_sub(w)) / 2;
     let y = area.y + (area.height.saturating_sub(h)) / 2;
-    let popup = Rect { x, y, width: w, height: h };
+    let popup = Rect {
+        x,
+        y,
+        width: w,
+        height: h,
+    };
 
     frame.render_widget(Clear, popup);
     let block = Block::default()
@@ -222,16 +263,37 @@ pub fn render_help(frame: &mut Frame, theme: &Theme) {
     frame.render_widget(block, popup);
 
     let lines = vec![
-        Line::from(Span::styled("Enter      отправить запрос", Style::default().fg(theme.text))),
-        Line::from(Span::styled("Esc / F1   закрыть справку", Style::default().fg(theme.text))),
-        Line::from(Span::styled("Tab        переключить фокус ленты/ввода", Style::default().fg(theme.text))),
-        Line::from(Span::styled("PgUp/PgDn  прокрутка диалога", Style::default().fg(theme.text))),
-        Line::from(Span::styled("Ctrl+C     выход", Style::default().fg(theme.text))),
+        Line::from(Span::styled(
+            "Enter      отправить запрос",
+            Style::default().fg(theme.text),
+        )),
+        Line::from(Span::styled(
+            "Esc / F1   закрыть справку",
+            Style::default().fg(theme.text),
+        )),
+        Line::from(Span::styled(
+            "Tab        переключить фокус ленты/ввода",
+            Style::default().fg(theme.text),
+        )),
+        Line::from(Span::styled(
+            "PgUp/PgDn  прокрутка диалога",
+            Style::default().fg(theme.text),
+        )),
+        Line::from(Span::styled(
+            "Ctrl+C     выход",
+            Style::default().fg(theme.text),
+        )),
         Line::from(""),
         Line::from(Span::styled("Команды:", theme.title())),
-        Line::from(Span::styled("/agent <текст>  запустить саб-агента", theme.dim())),
+        Line::from(Span::styled(
+            "/agent <текст>  запустить саб-агента",
+            theme.dim(),
+        )),
         Line::from(Span::styled("/clear          очистить ленту", theme.dim())),
         Line::from(Span::styled("/quit           выход", theme.dim())),
     ];
-    frame.render_widget(Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true }), inner);
+    frame.render_widget(
+        Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true }),
+        inner,
+    );
 }

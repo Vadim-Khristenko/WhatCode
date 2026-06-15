@@ -6,14 +6,18 @@ mod doctor;
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
-use herta_core::{AppConfig, ContextManager, DialogueMemory, LongMemoryStore, Message};
-use herta_core::persona;
 use herta_agent::Supervisor;
+use herta_core::persona;
+use herta_core::{AppConfig, ContextManager, DialogueMemory, LongMemoryStore, Message};
 use herta_llm::ChatClient;
 use herta_tui::App;
 
 #[derive(Parser, Debug)]
-#[command(name = "herta", version, about = "Великая Герта — голосовой ассистент и TUI на Rust")]
+#[command(
+    name = "herta",
+    version,
+    about = "Великая Герта — голосовой ассистент и TUI на Rust"
+)]
 struct Cli {
     /// Одноразовый запрос: вывести ответ и выйти.
     #[arg(short, long, value_name = "ТЕКСТ")]
@@ -33,9 +37,13 @@ enum Command {
 
 fn init_tracing(level: &str) {
     use tracing_subscriber::EnvFilter;
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level.to_lowercase()));
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level.to_lowercase()));
     // В TUI логи в stdout ломают рендер, поэтому пишем в stderr.
-    let _ = tracing_subscriber::fmt().with_env_filter(filter).with_writer(std::io::stderr).try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .try_init();
 }
 
 #[tokio::main]
@@ -80,26 +88,39 @@ async fn run_tui(config: AppConfig) -> anyhow::Result<()> {
         });
     }
 
-    let supervisor = Supervisor::new(Arc::clone(&client), &config.agent, persona::build_system_prompt(Some(client.model_name())));
+    let supervisor = Supervisor::new(
+        Arc::clone(&client),
+        &config.agent,
+        persona::build_system_prompt(Some(client.model_name())),
+    );
     let ctx_manager = ContextManager::new(&config.context);
     let mem_block = long_memory_block(&config);
 
-    let app = App::new(client, supervisor, ctx_manager, config.context.max_tokens, mem_block);
+    let app = App::new(
+        client,
+        supervisor,
+        ctx_manager,
+        config.context.max_tokens,
+        mem_block,
+    );
     app.run().await?;
     Ok(())
 }
 
 async fn run_oneshot(config: &AppConfig, prompt: &str) -> anyhow::Result<()> {
-    let client = herta_llm::build_client(config)?;
-    client.warm_up().await?;
-
-    // Быстрый ответ об идентичности без модели.
+    // Быстрый ответ об идентичности без модели и без сети.
     if persona::is_identity_query(prompt) {
         println!("{}", persona::build_identity_reply(prompt));
         return Ok(());
     }
 
-    let mut messages = persona::build_bootstrap_messages(Some(client.model_name()), long_memory_block(config).as_deref());
+    let client = herta_llm::build_client(config)?;
+    client.warm_up().await?;
+
+    let mut messages = persona::build_bootstrap_messages(
+        Some(client.model_name()),
+        long_memory_block(config).as_deref(),
+    );
     // Кратковременная история для связности.
     let memory = DialogueMemory::new(
         &config.memory.path,
@@ -111,7 +132,11 @@ async fn run_oneshot(config: &AppConfig, prompt: &str) -> anyhow::Result<()> {
     messages.push(Message::user(prompt.to_string()));
 
     let reply = client.chat(&messages).await?;
-    let reply = if reply.trim().is_empty() { "Пустой ответ модели.".to_string() } else { reply };
+    let reply = if reply.trim().is_empty() {
+        "Пустой ответ модели.".to_string()
+    } else {
+        reply
+    };
     println!("{reply}");
     memory.append_turn(prompt, &reply)?;
     Ok(())

@@ -72,7 +72,11 @@ pub struct LongMemoryStore {
 }
 
 fn normalize_content(content: &str) -> String {
-    content.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
+    content
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
 }
 
 impl LongMemoryStore {
@@ -87,7 +91,12 @@ impl LongMemoryStore {
         } else {
             Vec::new()
         };
-        Self { path, max_facts: max_facts.max(1), enabled, facts }
+        Self {
+            path,
+            max_facts: max_facts.max(1),
+            enabled,
+            facts,
+        }
     }
 
     pub fn all_facts(&self) -> &[Fact] {
@@ -95,17 +104,29 @@ impl LongMemoryStore {
     }
 
     pub fn by_category(&self, category: FactCategory) -> Vec<&Fact> {
-        self.facts.iter().filter(|f| f.category == category).collect()
+        self.facts
+            .iter()
+            .filter(|f| f.category == category)
+            .collect()
     }
 
     /// Добавить факт. Возвращает `None`, если дубликат по нормализованному тексту.
-    pub fn add_fact(&mut self, content: &str, category: FactCategory, source: FactSource) -> Result<Option<Fact>> {
+    pub fn add_fact(
+        &mut self,
+        content: &str,
+        category: FactCategory,
+        source: FactSource,
+    ) -> Result<Option<Fact>> {
         let trimmed = content.trim();
         if trimmed.is_empty() {
             return Ok(None);
         }
         let norm = normalize_content(trimmed);
-        if self.facts.iter().any(|f| normalize_content(&f.content) == norm) {
+        if self
+            .facts
+            .iter()
+            .any(|f| normalize_content(&f.content) == norm)
+        {
             return Ok(None);
         }
         let fact = Fact {
@@ -130,7 +151,8 @@ impl LongMemoryStore {
             return Ok(0);
         }
         let before = self.facts.len();
-        self.facts.retain(|f| !normalize_content(&f.content).contains(&needle));
+        self.facts
+            .retain(|f| !normalize_content(&f.content).contains(&needle));
         let removed = before - self.facts.len();
         if removed > 0 {
             self.persist()?;
@@ -173,7 +195,10 @@ impl LongMemoryStore {
                 std::fs::create_dir_all(parent)?;
             }
         }
-        let file = LongMemoryFile { version: 1, facts: self.facts.clone() };
+        let file = LongMemoryFile {
+            version: 1,
+            facts: self.facts.clone(),
+        };
         std::fs::write(&self.path, serde_json::to_string_pretty(&file)?).map_err(HertaError::Io)
     }
 }
@@ -187,8 +212,22 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("herta-lm-{}", uuid::Uuid::new_v4()));
         let path = dir.join("lm.json");
         let mut store = LongMemoryStore::load(&path, 100, true);
-        assert!(store.add_fact("Пользователь любит Rust", FactCategory::User, FactSource::Explicit).unwrap().is_some());
-        assert!(store.add_fact("пользователь  любит   rust", FactCategory::User, FactSource::Auto).unwrap().is_none());
+        assert!(store
+            .add_fact(
+                "Пользователь любит Rust",
+                FactCategory::User,
+                FactSource::Explicit
+            )
+            .unwrap()
+            .is_some());
+        assert!(store
+            .add_fact(
+                "пользователь  любит   rust",
+                FactCategory::User,
+                FactSource::Auto
+            )
+            .unwrap()
+            .is_none());
         let block = store.format_for_prompt().unwrap();
         assert!(block.contains("О пользователе"));
         std::fs::remove_dir_all(&dir).ok();

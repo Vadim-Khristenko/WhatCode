@@ -50,11 +50,15 @@ impl Analyzer {
         cmd.args(&self.base_args).arg(&path);
 
         let fut = cmd.output();
-        let timed = tokio::time::timeout(Duration::from_secs(self.config.timeout_seconds), fut).await;
+        let timed =
+            tokio::time::timeout(Duration::from_secs(self.config.timeout_seconds), fut).await;
 
         match timed {
             Err(_) => ToolResult::rejected(tool_name, "превышен таймаут анализа"),
-            Ok(Err(e)) => ToolResult::rejected(tool_name, format!("не удалось запустить {}: {e}", self.program)),
+            Ok(Err(e)) => ToolResult::rejected(
+                tool_name,
+                format!("не удалось запустить {}: {e}", self.program),
+            ),
             Ok(Ok(output)) => {
                 let mut combined = String::new();
                 combined.push_str(&String::from_utf8_lossy(&output.stdout));
@@ -84,7 +88,12 @@ impl TypeCheckTool {
             analyzer: Analyzer {
                 config,
                 program: "mypy",
-                base_args: vec!["--no-color-output", "--show-error-codes", "--no-error-summary", "--ignore-missing-imports"],
+                base_args: vec![
+                    "--no-color-output",
+                    "--show-error-codes",
+                    "--no-error-summary",
+                    "--ignore-missing-imports",
+                ],
             },
         }
     }
@@ -96,7 +105,12 @@ impl Tool for TypeCheckTool {
         ToolSpec::new(
             "type_check",
             "Проверить типы в файле/директории через mypy (относительно корня проекта).",
-            vec![ToolParameter::new("target", ParamType::String, "Путь относительно корня", true)],
+            vec![ToolParameter::new(
+                "target",
+                ParamType::String,
+                "Путь относительно корня",
+                true,
+            )],
         )
     }
 
@@ -130,7 +144,12 @@ impl Tool for LintTool {
         ToolSpec::new(
             "lint_code",
             "Линтинг файла/директории через ruff (относительно корня проекта).",
-            vec![ToolParameter::new("target", ParamType::String, "Путь относительно корня", true)],
+            vec![ToolParameter::new(
+                "target",
+                ParamType::String,
+                "Путь относительно корня",
+                true,
+            )],
         )
     }
 

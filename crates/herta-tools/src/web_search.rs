@@ -32,7 +32,10 @@ impl WebSearchTool {
         }
         if let Some(results) = value.get("results").and_then(Value::as_array) {
             for (i, r) in results.iter().take(max).enumerate() {
-                let title = r.get("title").and_then(Value::as_str).unwrap_or("(без названия)");
+                let title = r
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .unwrap_or("(без названия)");
                 let url = r.get("url").and_then(Value::as_str).unwrap_or("");
                 out.push_str(&format!("{}. {} — {}\n", i + 1, title, url));
             }
@@ -50,7 +53,12 @@ impl Tool for WebSearchTool {
         ToolSpec::new(
             "web_search",
             "Поиск актуальной информации в интернете (новости, погода, факты, релизы).",
-            vec![ToolParameter::new("query", ParamType::String, "Поисковый запрос", true)],
+            vec![ToolParameter::new(
+                "query",
+                ParamType::String,
+                "Поисковый запрос",
+                true,
+            )],
         )
     }
 
@@ -73,7 +81,12 @@ impl Tool for WebSearchTool {
             "include_answer": true,
         });
 
-        let resp = self.http.post("https://api.tavily.com/search").json(&body).send().await;
+        let resp = self
+            .http
+            .post("https://api.tavily.com/search")
+            .json(&body)
+            .send()
+            .await;
         match resp {
             Ok(r) if r.status().is_success() => match r.json::<Value>().await {
                 Ok(value) => {

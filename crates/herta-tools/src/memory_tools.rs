@@ -3,7 +3,10 @@
 
 use crate::registry::Tool;
 use async_trait::async_trait;
-use herta_core::{FactCategory, FactSource, LongMemoryStore, ParamType, ToolCall, ToolParameter, ToolResult, ToolSpec};
+use herta_core::{
+    FactCategory, FactSource, LongMemoryStore, ParamType, ToolCall, ToolParameter, ToolResult,
+    ToolSpec,
+};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -37,7 +40,10 @@ impl Tool for RememberTool {
         let Some(content) = call.arg_str("content") else {
             return ToolResult::rejected("remember", "не передан `content`");
         };
-        let category = call.arg_str("category").map(|c| FactCategory::parse(&c)).unwrap_or(FactCategory::Notes);
+        let category = call
+            .arg_str("category")
+            .map(|c| FactCategory::parse(&c))
+            .unwrap_or(FactCategory::Notes);
         let mut store = self.store.lock().await;
         match store.add_fact(&content, category, FactSource::Explicit) {
             Ok(Some(fact)) => ToolResult::ok("remember", format!("Запомнила: {}", fact.content)),
@@ -64,7 +70,12 @@ impl Tool for RecallTool {
         ToolSpec::new(
             "recall",
             "Вспомнить сохранённые факты, опционально по категории.",
-            vec![ToolParameter::new("category", ParamType::String, "user | project | preferences | notes", false)],
+            vec![ToolParameter::new(
+                "category",
+                ParamType::String,
+                "user | project | preferences | notes",
+                false,
+            )],
         )
     }
 
@@ -73,9 +84,19 @@ impl Tool for RecallTool {
         let listing = match call.arg_str("category") {
             Some(cat) => {
                 let category = FactCategory::parse(&cat);
-                store.by_category(category).iter().map(|f| format!("- {}", f.content)).collect::<Vec<_>>().join("\n")
+                store
+                    .by_category(category)
+                    .iter()
+                    .map(|f| format!("- {}", f.content))
+                    .collect::<Vec<_>>()
+                    .join("\n")
             }
-            None => store.all_facts().iter().map(|f| format!("- {}", f.content)).collect::<Vec<_>>().join("\n"),
+            None => store
+                .all_facts()
+                .iter()
+                .map(|f| format!("- {}", f.content))
+                .collect::<Vec<_>>()
+                .join("\n"),
         };
         if listing.is_empty() {
             ToolResult::ok("recall", "Пока ничего не сохранено.")
@@ -102,7 +123,12 @@ impl Tool for ForgetTool {
         ToolSpec::new(
             "forget",
             "Удалить из памяти факты, содержащие указанную подстроку.",
-            vec![ToolParameter::new("content_match", ParamType::String, "Подстрока для поиска", true)],
+            vec![ToolParameter::new(
+                "content_match",
+                ParamType::String,
+                "Подстрока для поиска",
+                true,
+            )],
         )
     }
 

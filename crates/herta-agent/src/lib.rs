@@ -8,8 +8,8 @@
 
 #![forbid(unsafe_code)]
 
-use herta_core::{Message, ToolResult};
 use herta_core::config::AgentConfig;
+use herta_core::{Message, ToolResult};
 use herta_llm::ChatClient;
 use std::sync::Arc;
 use std::time::Duration;
@@ -25,18 +25,34 @@ pub struct AgentTask {
 
 impl AgentTask {
     pub fn new(title: impl Into<String>, prompt: impl Into<String>) -> Self {
-        Self { id: uuid::Uuid::new_v4().to_string(), title: title.into(), prompt: prompt.into() }
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            title: title.into(),
+            prompt: prompt.into(),
+        }
     }
 }
 
 /// Событие жизненного цикла саб-агента, отправляемое в канал.
 #[derive(Debug, Clone)]
 pub enum AgentEvent {
-    Started { id: String, title: String },
+    Started {
+        id: String,
+        title: String,
+    },
     /// Инкрементальный фрагмент вывода (для живого отображения).
-    Chunk { id: String, text: String },
-    Completed { id: String, output: String },
-    Failed { id: String, error: String },
+    Chunk {
+        id: String,
+        text: String,
+    },
+    Completed {
+        id: String,
+        output: String,
+    },
+    Failed {
+        id: String,
+        error: String,
+    },
 }
 
 impl AgentEvent {
@@ -78,7 +94,11 @@ impl std::fmt::Debug for Supervisor {
 }
 
 impl Supervisor {
-    pub fn new(client: Arc<dyn ChatClient>, config: &AgentConfig, system_prompt: impl Into<String>) -> Self {
+    pub fn new(
+        client: Arc<dyn ChatClient>,
+        config: &AgentConfig,
+        system_prompt: impl Into<String>,
+    ) -> Self {
         Self {
             client,
             system_prompt: Arc::new(system_prompt.into()),
@@ -88,7 +108,11 @@ impl Supervisor {
     }
 
     /// Запустить одну задачу. События уходят в `tx`. Возвращает `JoinHandle`.
-    pub fn spawn(&self, task: AgentTask, tx: mpsc::UnboundedSender<AgentEvent>) -> tokio::task::JoinHandle<()> {
+    pub fn spawn(
+        &self,
+        task: AgentTask,
+        tx: mpsc::UnboundedSender<AgentEvent>,
+    ) -> tokio::task::JoinHandle<()> {
         let client = Arc::clone(&self.client);
         let system_prompt = Arc::clone(&self.system_prompt);
         let semaphore = Arc::clone(&self.semaphore);
@@ -99,25 +123,43 @@ impl Supervisor {
             let _permit = match semaphore.acquire().await {
                 Ok(p) => p,
                 Err(_) => {
-                    let _ = tx.send(AgentEvent::Failed { id: task.id.clone(), error: "семафор закрыт".into() });
+                    let _ = tx.send(AgentEvent::Failed {
+                        id: task.id.clone(),
+                        error: "семафор закрыт".into(),
+                    });
                     return;
                 }
             };
 
-            let _ = tx.send(AgentEvent::Started { id: task.id.clone(), title: task.title.clone() });
+            let _ = tx.send(AgentEvent::Started {
+                id: task.id.clone(),
+                title: task.title.clone(),
+            });
 
-            let messages = vec![Message::system(system_prompt.as_str()), Message::user(task.prompt.clone())];
+            let messages = vec![
+                Message::system(system_prompt.as_str()),
+                Message::user(task.prompt.clone()),
+            ];
             let work = client.chat(&messages);
 
             match tokio::time::timeout(timeout, work).await {
                 Ok(Ok(output)) => {
-                    let _ = tx.send(AgentEvent::Completed { id: task.id, output });
+                    let _ = tx.send(AgentEvent::Completed {
+                        id: task.id,
+                        output,
+                    });
                 }
                 Ok(Err(e)) => {
-                    let _ = tx.send(AgentEvent::Failed { id: task.id, error: e.to_string() });
+                    let _ = tx.send(AgentEvent::Failed {
+                        id: task.id,
+                        error: e.to_string(),
+                    });
                 }
                 Err(_) => {
-                    let _ = tx.send(AgentEvent::Failed { id: task.id, error: "таймаут саб-агента".into() });
+                    let _ = tx.send(AgentEvent::Failed {
+                        id: task.id,
+                        error: "таймаут саб-агента".into(),
+                    });
                 }
             }
         })

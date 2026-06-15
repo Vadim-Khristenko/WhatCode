@@ -103,7 +103,10 @@ impl ContextManager {
     }
 
     /// Построить запрос к LLM для суммаризации согласно плану.
-    pub fn build_summarization_request(messages: &[Message], plan: &CompactionPlan) -> Vec<Message> {
+    pub fn build_summarization_request(
+        messages: &[Message],
+        plan: &CompactionPlan,
+    ) -> Vec<Message> {
         let (start, end) = plan.summarize_range;
         let mut transcript = String::with_capacity(2048);
         for msg in &messages[start..end] {
@@ -143,13 +146,21 @@ mod tests {
     use super::*;
 
     fn cfg(max: usize, thresh: f32, keep: usize) -> ContextConfig {
-        ContextConfig { max_tokens: max, compaction_threshold: thresh, keep_recent_messages: keep }
+        ContextConfig {
+            max_tokens: max,
+            compaction_threshold: thresh,
+            keep_recent_messages: keep,
+        }
     }
 
     #[test]
     fn no_compaction_when_small() {
         let mgr = ContextManager::new(&cfg(8192, 0.8, 4));
-        let msgs = vec![Message::system("персона"), Message::user("привет"), Message::assistant("Уже лучше.")];
+        let msgs = vec![
+            Message::system("персона"),
+            Message::user("привет"),
+            Message::assistant("Уже лучше."),
+        ];
         assert_eq!(mgr.decide(&msgs), CompactionDecision::NotNeeded);
     }
 

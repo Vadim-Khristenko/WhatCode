@@ -23,7 +23,10 @@ pub struct ChatResponse {
 
 impl ChatResponse {
     pub fn text(text: impl Into<String>) -> Self {
-        Self { text: text.into(), tool_calls: Vec::new() }
+        Self {
+            text: text.into(),
+            tool_calls: Vec::new(),
+        }
     }
 
     pub fn wants_tools(&self) -> bool {
@@ -51,7 +54,11 @@ pub trait ChatClient: Send + Sync {
     /// Чат с инструментами. По умолчанию инструменты игнорируются и
     /// возвращается обычный текстовый ответ — провайдеры без нативного
     /// function-calling используют это поведение осознанно, а не как заглушку.
-    async fn chat_with_tools(&self, messages: &[Message], _tools: &[ToolSpec]) -> Result<ChatResponse> {
+    async fn chat_with_tools(
+        &self,
+        messages: &[Message],
+        _tools: &[ToolSpec],
+    ) -> Result<ChatResponse> {
         Ok(ChatResponse::text(self.chat(messages).await?))
     }
 }
@@ -63,12 +70,16 @@ pub fn build_client(config: &AppConfig) -> Result<Box<dyn ChatClient>> {
         LlmProvider::Cerebras => {
             let c = config.cerebras.clone();
             ensure_key(&c.api_key, "cerebras")?;
-            Ok(Box::new(openai_compat::OpenAiCompatClient::new("cerebras", c)?))
+            Ok(Box::new(openai_compat::OpenAiCompatClient::new(
+                "cerebras", c,
+            )?))
         }
         LlmProvider::DeepSeek => {
             let c = config.deepseek.clone();
             ensure_key(&c.api_key, "deepseek")?;
-            Ok(Box::new(openai_compat::OpenAiCompatClient::new("deepseek", c)?))
+            Ok(Box::new(openai_compat::OpenAiCompatClient::new(
+                "deepseek", c,
+            )?))
         }
         LlmProvider::GoogleAi => {
             let c = config.google_ai.clone();
@@ -118,7 +129,10 @@ mod tests {
     #[test]
     fn strips_think_blocks() {
         assert_eq!(sanitize_reply("<think>план</think>Ответ."), "Ответ.");
-        assert_eq!(sanitize_reply("Текст <think>шум</think> ещё."), "Текст  ещё.");
+        assert_eq!(
+            sanitize_reply("Текст <think>шум</think> ещё."),
+            "Текст  ещё."
+        );
         assert_eq!(sanitize_reply("Хвост <think>обрыв"), "Хвост");
         assert_eq!(sanitize_reply("  Чисто.  "), "Чисто.");
     }

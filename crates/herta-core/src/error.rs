@@ -49,15 +49,24 @@ impl HertaError {
     }
 
     pub fn llm(provider: impl Into<String>, message: impl Into<String>) -> Self {
-        Self::Llm { provider: provider.into(), message: message.into() }
+        Self::Llm {
+            provider: provider.into(),
+            message: message.into(),
+        }
     }
 
     pub fn tool(tool: impl Into<String>, message: impl Into<String>) -> Self {
-        Self::Tool { tool: tool.into(), message: message.into() }
+        Self::Tool {
+            tool: tool.into(),
+            message: message.into(),
+        }
     }
 
     pub fn agent(agent: impl Into<String>, message: impl Into<String>) -> Self {
-        Self::Agent { agent: agent.into(), message: message.into() }
+        Self::Agent {
+            agent: agent.into(),
+            message: message.into(),
+        }
     }
 }
 

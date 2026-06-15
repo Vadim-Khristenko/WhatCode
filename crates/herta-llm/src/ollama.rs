@@ -15,7 +15,10 @@ pub struct OllamaClient {
 
 impl std::fmt::Debug for OllamaClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("OllamaClient").field("host", &self.config.host).field("model", &self.config.model).finish()
+        f.debug_struct("OllamaClient")
+            .field("host", &self.config.host)
+            .field("model", &self.config.model)
+            .finish()
     }
 }
 
@@ -29,7 +32,11 @@ impl OllamaClient {
     }
 
     fn endpoint(&self, path: &str) -> String {
-        format!("{}/{}", self.config.host.trim_end_matches('/'), path.trim_start_matches('/'))
+        format!(
+            "{}/{}",
+            self.config.host.trim_end_matches('/'),
+            path.trim_start_matches('/')
+        )
     }
 
     fn options(&self) -> Value {
@@ -44,7 +51,10 @@ impl OllamaClient {
     }
 
     fn messages_to_json(messages: &[Message]) -> Vec<Value> {
-        messages.iter().map(|m| json!({ "role": m.role.as_str(), "content": m.content })).collect()
+        messages
+            .iter()
+            .map(|m| json!({ "role": m.role.as_str(), "content": m.content }))
+            .collect()
     }
 
     async fn post_chat(&self, body: Value) -> Result<Value> {
@@ -69,28 +79,48 @@ impl OllamaClient {
                 }
                 let retryable = is_retryable_status(status);
                 let text = resp.text().await.unwrap_or_default();
-                Err((retryable, HertaError::llm("ollama", format!("HTTP {status}: {text}"))))
+                Err((
+                    retryable,
+                    HertaError::llm("ollama", format!("HTTP {status}: {text}")),
+                ))
             }
         })
         .await
     }
 
     fn extract_text(value: &Value) -> String {
-        value.pointer("/message/content").and_then(Value::as_str).map(sanitize_reply).unwrap_or_default()
+        value
+            .pointer("/message/content")
+            .and_then(Value::as_str)
+            .map(sanitize_reply)
+            .unwrap_or_default()
     }
 
     fn extract_tool_calls(value: &Value) -> Vec<ToolCall> {
-        let Some(calls) = value.pointer("/message/tool_calls").and_then(Value::as_array) else {
+        let Some(calls) = value
+            .pointer("/message/tool_calls")
+            .and_then(Value::as_array)
+        else {
             return Vec::new();
         };
         calls
             .iter()
             .enumerate()
             .filter_map(|(i, c)| {
-                let name = c.pointer("/function/name").and_then(Value::as_str)?.to_string();
+                let name = c
+                    .pointer("/function/name")
+                    .and_then(Value::as_str)?
+                    .to_string();
                 // Ollama отдаёт аргументы уже как объект, а не как строку.
-                let arguments = c.pointer("/function/arguments").cloned().unwrap_or_else(|| json!({}));
-                Some(ToolCall { id: format!("call_{i}"), name, arguments })
+                let arguments = c
+                    .pointer("/function/arguments")
+                    .cloned()
+                    .unwrap_or_else(|| json!({}));
+                Some(ToolCall {
+                    id: format!("call_{i}"),
+                    name,
+                    arguments,
+                })
             })
             .collect()
     }
@@ -131,7 +161,11 @@ impl ChatClient for OllamaClient {
         Ok(Self::extract_text(&value))
     }
 
-    async fn chat_with_tools(&self, messages: &[Message], tools: &[ToolSpec]) -> Result<ChatResponse> {
+    async fn chat_with_tools(
+        &self,
+        messages: &[Message],
+        tools: &[ToolSpec],
+    ) -> Result<ChatResponse> {
         if tools.is_empty() {
             return Ok(ChatResponse::text(self.chat(messages).await?));
         }

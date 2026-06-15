@@ -1,0 +1,235 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (e.g. v0.4.0)"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  BIN_NAME: herta
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Создаём черновик релиза, к которому остальные джобы прикрепляют артефакты.
+  # ---------------------------------------------------------------------------
+  create-release:
+    name: Create GitHub release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: The Herta ${{ steps.version.outputs.version }}
+          draft: true
+          generate_release_notes: true
+
+  # ---------------------------------------------------------------------------
+  # 2. Сборка бинарей под десктоп-платформы и заливка архивов в релиз.
+  # ---------------------------------------------------------------------------
+  build:
+    name: build ${{ matrix.target }}
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            archive: tar.gz
+            cross: true
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install cross linker (aarch64 linux)
+        if: matrix.cross
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          mkdir -p .cargo
+          {
+            echo "[target.aarch64-unknown-linux-gnu]"
+            echo "linker = \"aarch64-linux-gnu-gcc\""
+          } >> .cargo/config.toml
+
+      - name: Build release binary
+        run: cargo build --release --locked --target ${{ matrix.target }} --bin ${{ env.BIN_NAME }}
+
+      - name: Package (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          staging="${BIN_NAME}-${{ needs.create-release.outputs.version }}-${{ matrix.target }}"
+          mkdir -p "$staging"
+          cp "target/${{ matrix.target }}/release/${BIN_NAME}" "$staging/"
+          cp README.md LICENSE .env.example "$staging/" 2>/dev/null || true
+          tar czf "$staging.tar.gz" "$staging"
+          echo "ASSET=$staging.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $staging = "$env:BIN_NAME-${{ needs.create-release.outputs.version }}-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/$env:BIN_NAME.exe" $staging
+          Copy-Item README.md, .env.example $staging -ErrorAction SilentlyContinue
+          Compress-Archive -Path $staging -DestinationPath "$staging.zip"
+          "ASSET=$staging.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create-release.outputs.version }}
+          files: ${{ env.ASSET }}
+
+  # ---------------------------------------------------------------------------
+  # 3. Debian / Ubuntu .deb через cargo-deb.
+  # ---------------------------------------------------------------------------
+  debian:
+    name: package .deb
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-deb
+        run: cargo install cargo-deb --locked
+      - name: Build .deb
+        run: cargo deb -p herta-cli --output target/debian/herta.deb
+      - name: Rename with version
+        run: |
+          mv target/debian/herta.deb "herta_${{ needs.create-release.outputs.version }}_amd64.deb"
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create-release.outputs.version }}
+          files: herta_${{ needs.create-release.outputs.version }}_amd64.deb
+
+  # ---------------------------------------------------------------------------
+  # 4. Arch Linux: генерируем PKGBUILD/.SRCINFO и (опционально) публикуем в AUR.
+  # ---------------------------------------------------------------------------
+  arch-aur:
+    name: Arch AUR PKGBUILD
+    needs: [create-release, build]
+    runs-on: ubuntu-latest
+    env:
+      # secrets нельзя использовать прямо в `if`, поэтому пробрасываем в env.
+      AUR_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Render PKGBUILD
+        run: |
+          version="${{ needs.create-release.outputs.version }}"
+          version_clean="${version#v}"
+          tarball="${BIN_NAME}-${version}-x86_64-unknown-linux-gnu.tar.gz"
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${version}/${tarball}"
+          sed -e "s/@VERSION@/${version_clean}/g" \
+              -e "s|@URL@|${url}|g" \
+              packaging/aur/PKGBUILD.in > PKGBUILD
+          cat PKGBUILD
+      - name: Upload PKGBUILD artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aur-pkgbuild
+          path: PKGBUILD
+      - name: Publish to AUR
+        if: ${{ env.AUR_KEY != '' }}
+        uses: KSXGitHub/github-actions-deploy-aur@v3
+        with:
+          pkgname: herta-voiceassistant-bin
+          pkgbuild: ./PKGBUILD
+          commit_username: VAI PROG
+          commit_email: vadim@vai-rice.space
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ needs.create-release.outputs.version }}"
+
+  # ---------------------------------------------------------------------------
+  # 5. NixOS: проверяем, что flake собирается.
+  # ---------------------------------------------------------------------------
+  nix:
+    name: Nix build
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: "experimental-features = nix-command flakes"
+      - name: Build flake
+        run: nix build .#default --print-build-logs
+
+  # ---------------------------------------------------------------------------
+  # 6. Android (aarch64) — best-effort, не блокирует релиз.
+  # ---------------------------------------------------------------------------
+  android:
+    name: Android aarch64 (best-effort)
+    needs: create-release
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+      - name: Set up NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27
+      - name: Build for Android
+        run: cargo ndk -t arm64-v8a build --release --bin ${{ env.BIN_NAME }}
+      - name: Package
+        run: |
+          staging="${BIN_NAME}-${{ needs.create-release.outputs.version }}-aarch64-linux-android"
+          mkdir -p "$staging"
+          cp target/aarch64-linux-android/release/${BIN_NAME} "$staging/" 2>/dev/null || true
+          tar czf "$staging.tar.gz" "$staging"
+          echo "ASSET=$staging.tar.gz" >> "$GITHUB_ENV"
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create-release.outputs.version }}
+          files: ${{ env.ASSET }}

@@ -45,11 +45,17 @@ impl Theme {
     }
 
     pub fn border(&self, focused: bool) -> Style {
-        Style::default().fg(if focused { self.border_focused } else { self.border })
+        Style::default().fg(if focused {
+            self.border_focused
+        } else {
+            self.border
+        })
     }
 
     pub fn title(&self) -> Style {
-        Style::default().fg(self.accent).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(self.accent)
+            .add_modifier(Modifier::BOLD)
     }
 
     pub fn dim(&self) -> Style {

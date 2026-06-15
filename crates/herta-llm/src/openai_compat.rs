@@ -17,7 +17,10 @@ pub struct OpenAiCompatClient {
 
 impl std::fmt::Debug for OpenAiCompatClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("OpenAiCompatClient").field("provider", &self.provider).field("model", &self.config.model).finish()
+        f.debug_struct("OpenAiCompatClient")
+            .field("provider", &self.provider)
+            .field("model", &self.config.model)
+            .finish()
     }
 }
 
@@ -27,11 +30,18 @@ impl OpenAiCompatClient {
             .timeout(Duration::from_secs_f64(config.timeout_seconds))
             .build()
             .map_err(|e| HertaError::llm(provider, e.to_string()))?;
-        Ok(Self { provider, config, http })
+        Ok(Self {
+            provider,
+            config,
+            http,
+        })
     }
 
     fn endpoint(&self) -> String {
-        format!("{}/chat/completions", self.config.base_url.trim_end_matches('/'))
+        format!(
+            "{}/chat/completions",
+            self.config.base_url.trim_end_matches('/')
+        )
     }
 
     fn messages_to_json(messages: &[Message]) -> Vec<Value> {
@@ -79,7 +89,10 @@ impl OpenAiCompatClient {
                 }
                 let retryable = is_retryable_status(status);
                 let text = resp.text().await.unwrap_or_default();
-                Err((retryable, HertaError::llm(provider, format!("HTTP {status}: {text}"))))
+                Err((
+                    retryable,
+                    HertaError::llm(provider, format!("HTTP {status}: {text}")),
+                ))
             }
         })
         .await
@@ -94,17 +107,35 @@ impl OpenAiCompatClient {
     }
 
     fn extract_tool_calls(value: &Value) -> Vec<ToolCall> {
-        let Some(calls) = value.pointer("/choices/0/message/tool_calls").and_then(Value::as_array) else {
+        let Some(calls) = value
+            .pointer("/choices/0/message/tool_calls")
+            .and_then(Value::as_array)
+        else {
             return Vec::new();
         };
         calls
             .iter()
             .filter_map(|c| {
-                let id = c.get("id").and_then(Value::as_str).unwrap_or("call").to_string();
-                let name = c.pointer("/function/name").and_then(Value::as_str)?.to_string();
-                let args_raw = c.pointer("/function/arguments").and_then(Value::as_str).unwrap_or("{}");
-                let arguments = serde_json::from_str::<Value>(args_raw).unwrap_or_else(|_| json!({}));
-                Some(ToolCall { id, name, arguments })
+                let id = c
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or("call")
+                    .to_string();
+                let name = c
+                    .pointer("/function/name")
+                    .and_then(Value::as_str)?
+                    .to_string();
+                let args_raw = c
+                    .pointer("/function/arguments")
+                    .and_then(Value::as_str)
+                    .unwrap_or("{}");
+                let arguments =
+                    serde_json::from_str::<Value>(args_raw).unwrap_or_else(|_| json!({}));
+                Some(ToolCall {
+                    id,
+                    name,
+                    arguments,
+                })
             })
             .collect()
     }
@@ -139,7 +170,11 @@ impl ChatClient for OpenAiCompatClient {
         Ok(Self::extract_text(&value))
     }
 
-    async fn chat_with_tools(&self, messages: &[Message], tools: &[ToolSpec]) -> Result<ChatResponse> {
+    async fn chat_with_tools(
+        &self,
+        messages: &[Message],
+        tools: &[ToolSpec],
+    ) -> Result<ChatResponse> {
         if tools.is_empty() {
             return Ok(ChatResponse::text(self.chat(messages).await?));
         }

@@ -79,12 +79,20 @@ pub async fn run(config: &AppConfig) -> i32 {
     line(
         Level::Ok,
         "Кратковременная память",
-        if config.memory.enabled { &config.memory.path } else { "выключена" },
+        if config.memory.enabled {
+            &config.memory.path
+        } else {
+            "выключена"
+        },
     );
     line(
         Level::Ok,
         "Долговременная память",
-        if config.long_memory.enabled { &config.long_memory.path } else { "выключена" },
+        if config.long_memory.enabled {
+            &config.long_memory.path
+        } else {
+            "выключена"
+        },
     );
 
     // Контекстное окно.
@@ -102,7 +110,10 @@ pub async fn run(config: &AppConfig) -> i32 {
     line(
         Level::Ok,
         "Саб-агенты",
-        &format!("до {} параллельно, таймаут {} c", config.agent.max_concurrent, config.agent.timeout_seconds),
+        &format!(
+            "до {} параллельно, таймаут {} c",
+            config.agent.max_concurrent, config.agent.timeout_seconds
+        ),
     );
 
     // Инструменты кода.
@@ -111,7 +122,11 @@ pub async fn run(config: &AppConfig) -> i32 {
             if binary_available(tool).await {
                 line(Level::Ok, "Инструмент кода", tool);
             } else {
-                line(Level::Warn, "Инструмент кода", &format!("{tool} не найден в PATH"));
+                line(
+                    Level::Warn,
+                    "Инструмент кода",
+                    &format!("{tool} не найден в PATH"),
+                );
                 warns += 1;
             }
         }
@@ -119,7 +134,11 @@ pub async fn run(config: &AppConfig) -> i32 {
 
     // Веб-поиск.
     if config.web_search.enabled && config.web_search.api_key.is_none() {
-        line(Level::Warn, "Веб-поиск", "включён, но не задан TAVILY_API_KEY");
+        line(
+            Level::Warn,
+            "Веб-поиск",
+            "включён, но не задан TAVILY_API_KEY",
+        );
         warns += 1;
     }
 

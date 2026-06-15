@@ -36,8 +36,18 @@ pub struct ToolParameter {
 }
 
 impl ToolParameter {
-    pub fn new(name: impl Into<String>, param_type: ParamType, description: impl Into<String>, required: bool) -> Self {
-        Self { name: name.into(), param_type, description: description.into(), required }
+    pub fn new(
+        name: impl Into<String>,
+        param_type: ParamType,
+        description: impl Into<String>,
+        required: bool,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            param_type,
+            description: description.into(),
+            required,
+        }
     }
 }
 
@@ -52,8 +62,17 @@ pub struct ToolSpec {
 }
 
 impl ToolSpec {
-    pub fn new(name: impl Into<String>, description: impl Into<String>, parameters: Vec<ToolParameter>) -> Self {
-        Self { name: name.into(), description: description.into(), parameters, destructive: false }
+    pub fn new(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        parameters: Vec<ToolParameter>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            description: description.into(),
+            parameters,
+            destructive: false,
+        }
     }
 
     pub fn destructive(mut self) -> Self {
@@ -100,7 +119,10 @@ pub struct ToolCall {
 
 impl ToolCall {
     pub fn arg_str(&self, key: &str) -> Option<String> {
-        self.arguments.get(key).and_then(|v| v.as_str()).map(|s| s.to_string())
+        self.arguments
+            .get(key)
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
     }
 
     pub fn arg_bool(&self, key: &str) -> Option<bool> {
@@ -120,11 +142,21 @@ pub struct ToolResult {
 
 impl ToolResult {
     pub fn ok(tool_name: impl Into<String>, message: impl Into<String>) -> Self {
-        Self { tool_name: tool_name.into(), message: message.into(), executed: true, data: None }
+        Self {
+            tool_name: tool_name.into(),
+            message: message.into(),
+            executed: true,
+            data: None,
+        }
     }
 
     pub fn rejected(tool_name: impl Into<String>, message: impl Into<String>) -> Self {
-        Self { tool_name: tool_name.into(), message: message.into(), executed: false, data: None }
+        Self {
+            tool_name: tool_name.into(),
+            message: message.into(),
+            executed: false,
+            data: None,
+        }
     }
 
     pub fn with_data(mut self, data: Value) -> Self {

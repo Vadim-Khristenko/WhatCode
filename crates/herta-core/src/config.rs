@@ -9,11 +9,18 @@ use serde::{Deserialize, Serialize};
 // --- помощники чтения окружения ---
 
 fn env_str(key: &str, default: &str) -> String {
-    std::env::var(key).ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty()).unwrap_or_else(|| default.to_string())
+    std::env::var(key)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| default.to_string())
 }
 
 fn env_opt(key: &str) -> Option<String> {
-    std::env::var(key).ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty())
+    std::env::var(key)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
 }
 
 fn env_bool(key: &str, default: bool) -> bool {
@@ -33,7 +40,11 @@ fn env_opt_parse<T: std::str::FromStr>(key: &str) -> Option<T> {
 
 fn env_csv(key: &str, default: &[&str]) -> Vec<String> {
     match env_opt(key) {
-        Some(v) => v.split(',').map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()).collect(),
+        Some(v) => v
+            .split(',')
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect(),
         None => default.iter().map(|s| s.to_string()).collect(),
     }
 }
@@ -147,7 +158,12 @@ pub struct MemoryConfig {
 
 impl Default for MemoryConfig {
     fn default() -> Self {
-        Self { enabled: true, path: "data/dialogue_memory.json".into(), max_messages: 80, context_messages: 12 }
+        Self {
+            enabled: true,
+            path: "data/dialogue_memory.json".into(),
+            max_messages: 80,
+            context_messages: 12,
+        }
     }
 }
 
@@ -162,7 +178,13 @@ pub struct LongMemoryConfig {
 
 impl Default for LongMemoryConfig {
     fn default() -> Self {
-        Self { enabled: true, path: "data/long_memory.json".into(), max_facts: 200, auto_extract_enabled: true, auto_extract_every_turns: 6 }
+        Self {
+            enabled: true,
+            path: "data/long_memory.json".into(),
+            max_facts: 200,
+            auto_extract_enabled: true,
+            auto_extract_every_turns: 6,
+        }
     }
 }
 
@@ -179,7 +201,15 @@ pub struct WebSearchConfig {
 
 impl Default for WebSearchConfig {
     fn default() -> Self {
-        Self { enabled: false, provider: "tavily".into(), api_key: None, max_results: 5, timeout_seconds: 15.0, search_depth: "basic".into(), followup_in_character: true }
+        Self {
+            enabled: false,
+            provider: "tavily".into(),
+            api_key: None,
+            max_results: 5,
+            timeout_seconds: 15.0,
+            search_depth: "basic".into(),
+            followup_in_character: true,
+        }
     }
 }
 
@@ -193,7 +223,12 @@ pub struct CodeToolsConfig {
 
 impl Default for CodeToolsConfig {
     fn default() -> Self {
-        Self { enabled: false, project_root: ".".into(), timeout_seconds: 30, self_check_enabled: false }
+        Self {
+            enabled: false,
+            project_root: ".".into(),
+            timeout_seconds: 30,
+            self_check_enabled: false,
+        }
     }
 }
 
@@ -233,7 +268,16 @@ impl Default for WakeWordConfig {
         Self {
             enabled: false,
             mode: "text".into(),
-            phrases: ["герта", "великая герта", "эй герта", "слушай герта", "herta"].iter().map(|s| s.to_string()).collect(),
+            phrases: [
+                "герта",
+                "великая герта",
+                "эй герта",
+                "слушай герта",
+                "herta",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
             follow_up_seconds: 10.0,
         }
     }
@@ -252,7 +296,11 @@ pub struct ContextConfig {
 
 impl Default for ContextConfig {
     fn default() -> Self {
-        Self { max_tokens: 8192, compaction_threshold: 0.8, keep_recent_messages: 6 }
+        Self {
+            max_tokens: 8192,
+            compaction_threshold: 0.8,
+            keep_recent_messages: 6,
+        }
     }
 }
 
@@ -268,7 +316,11 @@ pub struct AgentConfig {
 
 impl Default for AgentConfig {
     fn default() -> Self {
-        Self { enabled: true, max_concurrent: 4, timeout_seconds: 180 }
+        Self {
+            enabled: true,
+            max_concurrent: 4,
+            timeout_seconds: 180,
+        }
     }
 }
 
@@ -384,7 +436,10 @@ impl AppConfig {
 
         cfg.google_ai = GoogleAiConfig {
             api_key: env_opt("GOOGLE_AI_API_KEY").or_else(|| env_opt("GEMINI_API_KEY")),
-            base_url: env_str("GOOGLE_AI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"),
+            base_url: env_str(
+                "GOOGLE_AI_BASE_URL",
+                "https://generativelanguage.googleapis.com/v1beta",
+            ),
             model: env_str("GOOGLE_AI_MODEL", "gemma-3-27b-it"),
             fallback_model: env_opt("GOOGLE_AI_FALLBACK_MODEL"),
             timeout_seconds: env_parse("GOOGLE_AI_TIMEOUT_SECONDS", 45.0),
@@ -429,7 +484,10 @@ impl AppConfig {
         cfg.system_actions = SystemActionsConfig {
             enabled: env_bool("SYSTEM_ACTIONS_ENABLED", false),
             document_dir: env_str("SYSTEM_ACTIONS_DOCUMENT_DIR", "desktop"),
-            registry_path: env_str("SYSTEM_ACTIONS_REGISTRY_PATH", "data/system_actions_registry.json"),
+            registry_path: env_str(
+                "SYSTEM_ACTIONS_REGISTRY_PATH",
+                "data/system_actions_registry.json",
+            ),
             browser_home_url: env_str("SYSTEM_ACTIONS_BROWSER_HOME_URL", "https://www.google.com"),
             vscode_command: env_str("SYSTEM_ACTIONS_VSCODE_COMMAND", "code"),
             vscode_open_workspace: env_bool("SYSTEM_ACTIONS_VSCODE_OPEN_WORKSPACE", true),
@@ -438,7 +496,16 @@ impl AppConfig {
         cfg.wakeword = WakeWordConfig {
             enabled: env_bool("WAKEWORD_ENABLED", false),
             mode: env_str("WAKEWORD_MODE", "text").to_lowercase(),
-            phrases: env_csv("WAKEWORD_PHRASES", &["герта", "великая герта", "эй герта", "слушай герта", "herta"]),
+            phrases: env_csv(
+                "WAKEWORD_PHRASES",
+                &[
+                    "герта",
+                    "великая герта",
+                    "эй герта",
+                    "слушай герта",
+                    "herta",
+                ],
+            ),
             follow_up_seconds: env_parse("WAKEWORD_FOLLOW_UP_SECONDS", 10.0),
         };
 
