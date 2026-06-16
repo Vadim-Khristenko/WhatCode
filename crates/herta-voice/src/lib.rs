@@ -13,6 +13,9 @@
 #![forbid(unsafe_code)]
 
 mod cloud;
+pub mod stt;
+
+pub use stt::Stt;
 
 use herta_core::config::{TtsProvider, VoiceConfig};
 use std::process::{Command, Stdio};
@@ -36,6 +39,8 @@ impl Voice {
             TtsProvider::System => program.is_some(),
             TtsProvider::ElevenLabs => cfg.elevenlabs_api_key.is_some(),
             TtsProvider::GoogleCloud => cfg.google_api_key.is_some(),
+            TtsProvider::Azure => cfg.azure_api_key.is_some() && cfg.azure_region.is_some(),
+            TtsProvider::Qwen => cfg.qwen_api_key.is_some(),
         };
         Self {
             enabled: cfg.enabled && available,
@@ -53,6 +58,10 @@ impl Voice {
             TtsProvider::System => self.program.is_some(),
             TtsProvider::ElevenLabs => self.cfg.elevenlabs_api_key.is_some(),
             TtsProvider::GoogleCloud => self.cfg.google_api_key.is_some(),
+            TtsProvider::Azure => {
+                self.cfg.azure_api_key.is_some() && self.cfg.azure_region.is_some()
+            }
+            TtsProvider::Qwen => self.cfg.qwen_api_key.is_some(),
         }
     }
 
@@ -72,7 +81,10 @@ impl Voice {
         }
         match self.provider {
             TtsProvider::System => self.speak_system(trimmed),
-            TtsProvider::ElevenLabs | TtsProvider::GoogleCloud => {
+            TtsProvider::ElevenLabs
+            | TtsProvider::GoogleCloud
+            | TtsProvider::Azure
+            | TtsProvider::Qwen => {
                 let voice = self.clone();
                 let owned = trimmed.to_string();
                 // Облачный синтез асинхронный — не блокируем вызывающего.

@@ -18,6 +18,8 @@ pub async fn synthesize_and_play(
     let (bytes, ext) = match provider {
         TtsProvider::ElevenLabs => (elevenlabs(http, cfg, text).await?, "mp3"),
         TtsProvider::GoogleCloud => (google(http, cfg, text).await?, "mp3"),
+        TtsProvider::Azure => (azure(http, cfg, text).await?, "mp3"),
+        TtsProvider::Qwen => (qwen(http, cfg, text).await?, "mp3"),
         TtsProvider::System => return Err("system-провайдер не использует облако".into()),
     };
     let path = write_temp(&bytes, ext)?;
@@ -36,7 +38,7 @@ async fn elevenlabs(
     let voice_id = cfg
         .elevenlabs_voice_id
         .as_deref()
-        .unwrap_or("21m00Tcm4TlvDq8ikWAM");
+        .unwrap_or("ZYcSL3av41fQqtckDugo");
     let model = cfg
         .elevenlabs_model
         .as_deref()
@@ -87,6 +89,86 @@ async fn google(http: &reqwest::Client, cfg: &VoiceConfig, text: &str) -> Result
     base64::engine::general_purpose::STANDARD
         .decode(b64)
         .map_err(|e| format!("base64: {e}"))
+}
+
+/// Microsoft Azure Speech: SSML → MP3 через REST cognitiveservices.
+async fn azure(http: &reqwest::Client, cfg: &VoiceConfig, text: &str) -> Result<Vec<u8>, String> {
+    let key = cfg
+        .azure_api_key
+        .as_deref()
+        .ok_or("нет AZURE_TTS_API_KEY")?;
+    let region = cfg.azure_region.as_deref().ok_or("нет AZURE_TTS_REGION")?;
+    let voice = cfg.azure_voice.as_deref().unwrap_or("ru-RU-SvetlanaNeural");
+    let lang = voice.split('-').take(2).collect::<Vec<_>>().join("-");
+    let url = format!("https://{region}.tts.speech.microsoft.com/cognitiveservices/v1");
+    // Экранируем XML-спецсимволы в тексте для SSML.
+    let safe = text
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+    let ssml = format!(
+        "<speak version='1.0' xml:lang='{lang}'><voice xml:lang='{lang}' name='{voice}'>{safe}</voice></speak>"
+    );
+    let resp = http
+        .post(&url)
+        .header("Ocp-Apim-Subscription-Key", key)
+        .header("Content-Type", "application/ssml+xml")
+        .header(
+            "X-Microsoft-OutputFormat",
+            "audio-24khz-48kbitrate-mono-mp3",
+        )
+        .header("User-Agent", "TheHerta")
+        .body(ssml)
+        .timeout(Duration::from_secs(60))
+        .send()
+        .await
+        .map_err(|e| format!("сеть Azure TTS: {e}"))?;
+    if !resp.status().is_success() {
+        return Err(format!("Azure TTS HTTP {}", resp.status().as_u16()));
+    }
+    Ok(resp.bytes().await.map_err(|e| e.to_string())?.to_vec())
+}
+
+/// Alibaba Qwen / DashScope TTS (международный эндпоинт по умолчанию).
+async fn qwen(http: &reqwest::Client, cfg: &VoiceConfig, text: &str) -> Result<Vec<u8>, String> {
+    let key = cfg.qwen_api_key.as_deref().ok_or("нет QWEN_TTS_API_KEY")?;
+    let model = cfg.qwen_model.as_deref().unwrap_or("qwen-tts");
+    let voice = cfg.qwen_voice.as_deref().unwrap_or("Chelsie");
+    let base = cfg
+        .qwen_base_url
+        .as_deref()
+        .unwrap_or("https://dashscope-intl.aliyuncs.com/api/v1");
+    let url = format!(
+        "{}/services/aigc/multimodal-generation/generation",
+        base.trim_end_matches('/')
+    );
+    let resp = http
+        .post(&url)
+        .bearer_auth(key)
+        .json(&json!({
+            "model": model,
+            "input": { "text": text, "voice": voice },
+        }))
+        .timeout(Duration::from_secs(60))
+        .send()
+        .await
+        .map_err(|e| format!("сеть Qwen TTS: {e}"))?;
+    if !resp.status().is_success() {
+        return Err(format!("Qwen TTS HTTP {}", resp.status().as_u16()));
+    }
+    // DashScope возвращает ссылку на аудио в output.audio.url — скачиваем её.
+    let value: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let audio_url = value
+        .pointer("/output/audio/url")
+        .and_then(|v| v.as_str())
+        .ok_or("нет output.audio.url в ответе Qwen")?;
+    let audio = http
+        .get(audio_url)
+        .timeout(Duration::from_secs(60))
+        .send()
+        .await
+        .map_err(|e| format!("скачивание Qwen-аудио: {e}"))?;
+    Ok(audio.bytes().await.map_err(|e| e.to_string())?.to_vec())
 }
 
 fn write_temp(bytes: &[u8], ext: &str) -> Result<std::path::PathBuf, String> {

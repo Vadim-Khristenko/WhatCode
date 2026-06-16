@@ -24,7 +24,7 @@ use herta_core::{
 };
 use herta_llm::ChatClient;
 use herta_tools::ToolRegistry;
-use herta_voice::Voice;
+use herta_voice::{Stt, Voice};
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use std::io::{self, Stdout};
@@ -38,6 +38,9 @@ enum Backend {
     ReplyError(String),
     Summary { plan: CompactionPlan, text: String },
     SummaryError(String),
+    Recap(String),
+    Transcript(String),
+    Notice(String),
 }
 
 /// Структурные зависимости приложения (не изменяются по кадрам).
@@ -49,11 +52,16 @@ pub struct App {
     supervisor: Supervisor,
     ctx_manager: ContextManager,
     voice: Voice,
+    stt: Stt,
     conversation: Vec<Message>,
     /// Текущая цель пользователя (команда /goal), инъектируется в каждый запрос.
     goal: Option<String>,
     /// Предел итераций нативного tool-loop.
     tool_iterations: usize,
+    /// Авто-recap: краткая сводка каждые N ходов (тумблер как в Claude Code).
+    recap_enabled: bool,
+    recap_every_turns: u32,
+    turns_since_recap: u32,
     show_help: bool,
     backend_tx: mpsc::UnboundedSender<Backend>,
     backend_rx: mpsc::UnboundedReceiver<Backend>,
@@ -69,8 +77,11 @@ impl App {
         supervisor: Supervisor,
         ctx_manager: ContextManager,
         voice: Voice,
+        stt: Stt,
         context_limit: usize,
         tool_iterations: usize,
+        recap_enabled: bool,
+        recap_every_turns: u32,
         long_memory_block: Option<String>,
     ) -> Self {
         let provider = client.provider_name().to_string();
@@ -99,9 +110,13 @@ impl App {
             supervisor,
             ctx_manager,
             voice,
+            stt,
             conversation,
             goal: None,
             tool_iterations: tool_iterations.max(1),
+            recap_enabled,
+            recap_every_turns: recap_every_turns.max(1),
+            turns_since_recap: 0,
             show_help: false,
             backend_tx,
             backend_rx,
@@ -397,6 +412,31 @@ impl App {
                 }
             }
             "compact" => self.force_compact(),
+            "recap" => match tail {
+                "on" => {
+                    self.recap_enabled = true;
+                    self.turns_since_recap = 0;
+                    self.state.push_line(ChatLine::notice(format!(
+                        "Авто-recap включён (каждые {} ходов).",
+                        self.recap_every_turns
+                    )));
+                }
+                "off" => {
+                    self.recap_enabled = false;
+                    self.state
+                        .push_line(ChatLine::notice("Авто-recap выключен."));
+                }
+                _ => self.run_recap(),
+            },
+            "transcribe" => {
+                if tail.is_empty() {
+                    self.state.push_line(ChatLine::notice(
+                        "Использование: /transcribe <путь к аудиофайлу>",
+                    ));
+                } else {
+                    self.transcribe(tail);
+                }
+            }
             "say" => {
                 if !self.voice.is_available() {
                     self.state.push_line(ChatLine::notice(
@@ -447,7 +487,26 @@ impl App {
                 self.state.status = "готова".into();
                 self.recompute_context();
                 self.maybe_compact();
+                self.maybe_recap();
             }
+            Backend::Recap(text) => {
+                self.state
+                    .push_line(ChatLine::notice(format!("Recap:\n{}", text.trim())));
+            }
+            Backend::Transcript(text) => {
+                if text.trim().is_empty() {
+                    self.state
+                        .push_line(ChatLine::notice("Распознавание не дало текста."));
+                } else {
+                    self.state
+                        .push_line(ChatLine::notice(format!("Распознано: {text}")));
+                    self.state.push_line(ChatLine::user(text.clone()));
+                    self.conversation.push(Message::user(text));
+                    self.recompute_context();
+                    self.dispatch_turn();
+                }
+            }
+            Backend::Notice(text) => self.state.push_line(ChatLine::notice(text)),
             Backend::ReplyError(err) => {
                 self.state
                     .push_line(ChatLine::error(format!("Сбой запроса: {err}")));
@@ -524,6 +583,87 @@ impl App {
             None => self
                 .state
                 .push_line(ChatLine::notice("Недостаточно истории для сжатия.")),
+        }
+    }
+
+    /// Авто-recap: считаем ходы и периодически делаем краткую сводку.
+    fn maybe_recap(&mut self) {
+        if !self.recap_enabled {
+            return;
+        }
+        self.turns_since_recap += 1;
+        if self.turns_since_recap >= self.recap_every_turns {
+            self.turns_since_recap = 0;
+            self.run_recap();
+        }
+    }
+
+    /// Сформировать микро-recap по хвосту диалога (фоновый лёгкий запрос).
+    fn run_recap(&mut self) {
+        // Берём последние реплики (без системного префикса) для краткой сводки.
+        let tail: Vec<Message> = self
+            .conversation
+            .iter()
+            .filter(|m| matches!(m.role, herta_core::Role::User | herta_core::Role::Assistant))
+            .rev()
+            .take(12)
+            .cloned()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        if tail.is_empty() {
+            self.state
+                .push_line(ChatLine::notice("Пока нечего резюмировать."));
+            return;
+        }
+        let mut request = vec![Message::system(
+            "Сделай микро-recap текущего диалога: 2-4 кратких пункта о состоянии задачи, \
+             принятых решениях и следующем шаге. Только маркированный список, без воды и без образа.",
+        )];
+        request.extend(tail);
+
+        self.state.status = "recap…".into();
+        let client = Arc::clone(&self.client);
+        let tx = self.backend_tx.clone();
+        tokio::spawn(async move {
+            match client.chat(&request).await {
+                Ok(text) if !text.trim().is_empty() => {
+                    let _ = tx.send(Backend::Recap(text));
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    let _ = tx.send(Backend::Notice(format!("recap не удался: {e}")));
+                }
+            }
+        });
+    }
+
+    /// Распознать речь из аудиофайла и отправить как реплику пользователя.
+    fn transcribe(&mut self, path: &str) {
+        self.state
+            .push_line(ChatLine::notice(format!("Распознаю аудио: {path}")));
+        self.state.status = format!("STT ({})…", self.stt_label());
+        let stt = self.stt.clone();
+        let tx = self.backend_tx.clone();
+        let path = path.to_string();
+        tokio::spawn(async move {
+            match stt.transcribe_file(&path).await {
+                Ok(text) => {
+                    let _ = tx.send(Backend::Transcript(text));
+                }
+                Err(e) => {
+                    let _ = tx.send(Backend::Notice(format!("STT не удалось: {e}")));
+                }
+            }
+        });
+    }
+
+    fn stt_label(&self) -> &'static str {
+        if self.stt.provider().is_local() {
+            "локально"
+        } else {
+            "облако"
         }
     }
 

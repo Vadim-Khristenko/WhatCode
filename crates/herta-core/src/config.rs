@@ -371,6 +371,10 @@ pub enum TtsProvider {
     ElevenLabs,
     /// Google Cloud Text-to-Speech (облачный, требует API-ключ).
     GoogleCloud,
+    /// Microsoft Azure Speech (облачный, требует ключ + регион).
+    Azure,
+    /// Alibaba Qwen / DashScope TTS (облачный, требует API-ключ).
+    Qwen,
 }
 
 impl TtsProvider {
@@ -378,8 +382,14 @@ impl TtsProvider {
         match s.trim().to_lowercase().as_str() {
             "elevenlabs" | "eleven" => Self::ElevenLabs,
             "google" | "google_cloud" | "gcloud" => Self::GoogleCloud,
+            "azure" | "microsoft" => Self::Azure,
+            "qwen" | "dashscope" | "alibaba" => Self::Qwen,
             _ => Self::System,
         }
+    }
+
+    pub fn is_cloud(self) -> bool {
+        self != Self::System
     }
 }
 
@@ -401,6 +411,82 @@ pub struct VoiceConfig {
     pub google_api_key: Option<String>,
     pub google_voice: Option<String>,
     pub google_language: Option<String>,
+    /// Azure Speech TTS: ключ, регион, имя голоса.
+    pub azure_api_key: Option<String>,
+    pub azure_region: Option<String>,
+    pub azure_voice: Option<String>,
+    /// Qwen / DashScope TTS: ключ, имя голоса, модель, базовый URL (intl/cn).
+    pub qwen_api_key: Option<String>,
+    pub qwen_voice: Option<String>,
+    pub qwen_model: Option<String>,
+    pub qwen_base_url: Option<String>,
+}
+
+/// Провайдер распознавания речи (STT). Работает по аудиофайлу: локально (Whisper
+/// CLI) или через облако.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SttProvider {
+    /// Локальный Whisper через CLI (`whisper` / whisper.cpp). Полностью офлайн.
+    #[default]
+    WhisperLocal,
+    /// OpenAI-совместимый `/audio/transcriptions` (OpenAI, Groq, Qwen-omni и пр.).
+    OpenAiCompatible,
+    /// Deepgram (облачный).
+    Deepgram,
+    /// Microsoft Azure Speech (облачный).
+    Azure,
+    /// Google Cloud Speech-to-Text (облачный).
+    GoogleCloud,
+}
+
+impl SttProvider {
+    pub fn parse(s: &str) -> Self {
+        match s.trim().to_lowercase().as_str() {
+            "openai" | "openai_compatible" | "groq" | "qwen" | "whisper_cloud" => {
+                Self::OpenAiCompatible
+            }
+            "deepgram" => Self::Deepgram,
+            "azure" | "microsoft" => Self::Azure,
+            "google" | "google_cloud" | "vertex" => Self::GoogleCloud,
+            _ => Self::WhisperLocal,
+        }
+    }
+
+    pub fn is_local(self) -> bool {
+        self == Self::WhisperLocal
+    }
+}
+
+/// Конфигурация распознавания речи.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SttConfig {
+    pub provider: SttProvider,
+    pub language: Option<String>,
+    /// Локальный Whisper: имя бинаря и модель/размер.
+    pub whisper_command: Option<String>,
+    pub whisper_model: Option<String>,
+    /// Облачные: ключ, базовый URL, модель.
+    pub api_key: Option<String>,
+    pub base_url: Option<String>,
+    pub model: Option<String>,
+    /// Azure-регион (для Azure STT).
+    pub azure_region: Option<String>,
+}
+
+impl Default for SttConfig {
+    fn default() -> Self {
+        Self {
+            provider: SttProvider::WhisperLocal,
+            language: Some("ru".into()),
+            whisper_command: None,
+            whisper_model: Some("base".into()),
+            api_key: None,
+            base_url: None,
+            model: None,
+            azure_region: None,
+        }
+    }
 }
 
 /// Корневая конфигурация приложения.
@@ -425,8 +511,12 @@ pub struct AppConfig {
     pub context: ContextConfig,
     pub agent: AgentConfig,
     pub voice: VoiceConfig,
+    pub stt: SttConfig,
     /// Стартовый режим работы агента.
     pub mode: crate::mode::AgentMode,
+    /// Авто-recap: периодически вставлять краткую сводку (как в Claude Code).
+    pub recap_enabled: bool,
+    pub recap_every_turns: u32,
 }
 
 impl Default for AppConfig {
@@ -469,7 +559,10 @@ impl Default for AppConfig {
             context: ContextConfig::default(),
             agent: AgentConfig::default(),
             voice: VoiceConfig::default(),
+            stt: SttConfig::default(),
             mode: crate::mode::AgentMode::Auto,
+            recap_enabled: false,
+            recap_every_turns: 8,
         }
     }
 }
@@ -629,11 +722,38 @@ impl AppConfig {
             google_api_key: env_opt("GOOGLE_TTS_API_KEY").or_else(|| env_opt("GOOGLE_AI_API_KEY")),
             google_voice: env_opt("GOOGLE_TTS_VOICE"),
             google_language: env_opt("GOOGLE_TTS_LANGUAGE"),
+            azure_api_key: env_opt("AZURE_TTS_API_KEY").or_else(|| env_opt("AZURE_SPEECH_KEY")),
+            azure_region: env_opt("AZURE_TTS_REGION").or_else(|| env_opt("AZURE_SPEECH_REGION")),
+            azure_voice: env_opt("AZURE_TTS_VOICE"),
+            qwen_api_key: env_opt("QWEN_TTS_API_KEY").or_else(|| env_opt("DASHSCOPE_API_KEY")),
+            qwen_voice: env_opt("QWEN_TTS_VOICE"),
+            qwen_model: env_opt("QWEN_TTS_MODEL"),
+            qwen_base_url: env_opt("QWEN_BASE_URL"),
+        };
+
+        cfg.stt = SttConfig {
+            provider: SttProvider::parse(&env_str("STT_PROVIDER", "whisper_local")),
+            language: env_opt("STT_LANGUAGE").or_else(|| Some("ru".into())),
+            whisper_command: env_opt("STT_WHISPER_COMMAND"),
+            whisper_model: env_opt("STT_WHISPER_MODEL").or_else(|| Some("base".into())),
+            api_key: env_opt("STT_API_KEY")
+                .or_else(|| env_opt("DEEPGRAM_API_KEY"))
+                .or_else(|| env_opt("AZURE_SPEECH_KEY"))
+                .or_else(|| env_opt("OPENAI_API_KEY"))
+                .or_else(|| env_opt("GROQ_API_KEY"))
+                .or_else(|| env_opt("DASHSCOPE_API_KEY"))
+                .or_else(|| env_opt("GOOGLE_AI_API_KEY")),
+            base_url: env_opt("STT_BASE_URL"),
+            model: env_opt("STT_MODEL"),
+            azure_region: env_opt("AZURE_SPEECH_REGION").or_else(|| env_opt("AZURE_TTS_REGION")),
         };
 
         cfg.mode = env_opt("HERTA_MODE")
             .and_then(|m| crate::mode::AgentMode::parse(&m))
             .unwrap_or(crate::mode::AgentMode::Auto);
+
+        cfg.recap_enabled = env_bool("RECAP_ENABLED", false);
+        cfg.recap_every_turns = env_parse("RECAP_EVERY_TURNS", 8);
 
         cfg
     }

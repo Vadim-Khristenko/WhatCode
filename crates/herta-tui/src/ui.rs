@@ -316,6 +316,11 @@ pub fn render_help(frame: &mut Frame, theme: &Theme) {
             theme.dim(),
         )),
         Line::from(Span::styled("/compact        сжать контекст", theme.dim())),
+        Line::from(Span::styled("/recap [on|off] краткая сводка", theme.dim())),
+        Line::from(Span::styled(
+            "/transcribe <файл> распознать речь (STT)",
+            theme.dim(),
+        )),
         Line::from(Span::styled("/say <текст>    озвучить (TTS)", theme.dim())),
         Line::from(Span::styled(
             "/model          модель и контекст",

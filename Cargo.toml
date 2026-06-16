@@ -14,7 +14,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 rust-version = "1.82"
 license = "MIT"
@@ -35,7 +35,7 @@ herta-tui = { path = "crates/herta-tui" }
 tokio = { version = "1.43", features = ["rt-multi-thread", "macros", "sync", "time", "process", "io-util", "fs", "signal"] }
 tokio-stream = "0.1"
 futures = "0.3"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream", "multipart"] }
 
 # Сериализация / данные.
 serde = { version = "1", features = ["derive"] }

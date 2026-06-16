@@ -47,6 +47,10 @@ pub enum FactSource {
     Auto,
 }
 
+fn default_importance() -> u8 {
+    3
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Fact {
     pub fact_id: String,
@@ -54,6 +58,12 @@ pub struct Fact {
     pub content: String,
     pub created_at: String,
     pub source: FactSource,
+    /// Важность 1..5 (выше — приоритетнее в промпте). Старые файлы → 3.
+    #[serde(default = "default_importance")]
+    pub importance: u8,
+    /// Сколько раз факт был востребован (recall). Старые файлы → 0.
+    #[serde(default)]
+    pub hits: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -135,6 +145,8 @@ impl LongMemoryStore {
             content: trimmed.to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
             source,
+            importance: default_importance(),
+            hits: 0,
         };
         self.facts.push(fact.clone());
         if self.facts.len() > self.max_facts {
@@ -172,12 +184,18 @@ impl LongMemoryStore {
         if self.facts.is_empty() {
             return None;
         }
-        let mut out = String::from("Известные факты (долговременная память):");
+        let mut out = String::from("Известные факты (долговременная память, важное выше):");
         for category in FactCategory::all() {
-            let items = self.by_category(category);
+            let mut items = self.by_category(category);
             if items.is_empty() {
                 continue;
             }
+            // Сортировка: важность по убыванию, затем свежесть (created_at) по убыванию.
+            items.sort_by(|a, b| {
+                b.importance
+                    .cmp(&a.importance)
+                    .then_with(|| b.created_at.cmp(&a.created_at))
+            });
             out.push_str(&format!("\n{}:", category.label_ru()));
             for fact in items {
                 out.push_str(&format!("\n- {}", fact.content));

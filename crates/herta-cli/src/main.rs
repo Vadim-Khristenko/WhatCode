@@ -110,6 +110,7 @@ async fn run_tui(config: AppConfig) -> anyhow::Result<()> {
     );
     let ctx_manager = ContextManager::new(&config.context);
     let voice = herta_voice::Voice::from_config(&config.voice);
+    let stt = herta_voice::Stt::from_config(&config.stt);
 
     let app = App::new(
         client,
@@ -117,8 +118,11 @@ async fn run_tui(config: AppConfig) -> anyhow::Result<()> {
         supervisor,
         ctx_manager,
         voice,
+        stt,
         config.context.max_tokens,
         config.agent.tool_loop_iterations,
+        config.recap_enabled,
+        config.recap_every_turns,
         mem_block,
     );
     app.run().await?;
