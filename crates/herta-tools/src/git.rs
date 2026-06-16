@@ -168,3 +168,138 @@ impl Tool for GitBranchTool {
         self.ctx.git("git_branches", &["branch", "--list"]).await
     }
 }
+
+/// `git_show` — показать конкретный коммит (по умолчанию HEAD).
+pub struct GitShowTool {
+    ctx: GitContext,
+}
+impl Default for GitShowTool {
+    fn default() -> Self {
+        Self {
+            ctx: GitContext::new(),
+        }
+    }
+}
+
+#[async_trait]
+impl Tool for GitShowTool {
+    fn spec(&self) -> ToolSpec {
+        ToolSpec::new(
+            "git_show",
+            "Показать содержимое коммита Git (метаданные и дифф). Только чтение. Параметр `ref` — \
+             хеш/ссылка коммита (по умолчанию HEAD). Используй, чтобы изучить конкретное изменение.",
+            vec![ToolParameter::new("ref", ParamType::String, "Хеш или ссылка коммита (по умолчанию HEAD)", false)],
+        )
+    }
+    async fn call(&self, call: &ToolCall) -> ToolResult {
+        let r = call.arg_str("ref").unwrap_or_else(|| "HEAD".to_string());
+        if r.contains("..") || r.starts_with('-') {
+            return ToolResult::rejected("git_show", "недопустимая ссылка");
+        }
+        self.ctx.git("git_show", &["show", "--stat", &r]).await
+    }
+}
+
+/// `git_grep` — поиск по содержимому отслеживаемых файлов.
+pub struct GitGrepTool {
+    ctx: GitContext,
+}
+impl Default for GitGrepTool {
+    fn default() -> Self {
+        Self {
+            ctx: GitContext::new(),
+        }
+    }
+}
+
+#[async_trait]
+impl Tool for GitGrepTool {
+    fn spec(&self) -> ToolSpec {
+        ToolSpec::new(
+            "git_grep",
+            "Искать строку/паттерн по отслеживаемым в Git файлам (`git grep -n`). Только чтение. \
+             Быстрее обхода файлов вручную. Параметр `pattern` обязателен.",
+            vec![ToolParameter::new(
+                "pattern",
+                ParamType::String,
+                "Искомая строка или regex",
+                true,
+            )],
+        )
+    }
+    async fn call(&self, call: &ToolCall) -> ToolResult {
+        let Some(pattern) = call.arg_str("pattern") else {
+            return ToolResult::rejected("git_grep", "не передан `pattern`");
+        };
+        self.ctx
+            .git("git_grep", &["grep", "-n", "-e", &pattern])
+            .await
+    }
+}
+
+/// `git_add` — добавить пути в индекс (staging).
+pub struct GitAddTool {
+    ctx: GitContext,
+}
+impl Default for GitAddTool {
+    fn default() -> Self {
+        Self {
+            ctx: GitContext::new(),
+        }
+    }
+}
+
+#[async_trait]
+impl Tool for GitAddTool {
+    fn spec(&self) -> ToolSpec {
+        ToolSpec::new(
+            "git_add",
+            "Добавить изменения в индекс Git (`git add`). Изменяет состояние репозитория. Параметр \
+             `path` — путь/паттерн относительно корня (по умолчанию все изменения `-A`).",
+            vec![ToolParameter::new("path", ParamType::String, "Путь для staging (по умолчанию все)", false)],
+        )
+        .write()
+    }
+    async fn call(&self, call: &ToolCall) -> ToolResult {
+        match call.arg_str("path") {
+            Some(path) if !path.contains("..") => {
+                self.ctx.git("git_add", &["add", "--", &path]).await
+            }
+            Some(_) => ToolResult::rejected("git_add", "путь не должен содержать `..`"),
+            None => self.ctx.git("git_add", &["add", "-A"]).await,
+        }
+    }
+}
+
+/// `git_commit` — создать коммит из проиндексированных изменений.
+pub struct GitCommitTool {
+    ctx: GitContext,
+}
+impl Default for GitCommitTool {
+    fn default() -> Self {
+        Self {
+            ctx: GitContext::new(),
+        }
+    }
+}
+
+#[async_trait]
+impl Tool for GitCommitTool {
+    fn spec(&self) -> ToolSpec {
+        ToolSpec::new(
+            "git_commit",
+            "Создать коммит Git из проиндексированных изменений (`git commit -m`). Изменяет историю \
+             репозитория. Параметр `message` обязателен. Не делает push.",
+            vec![ToolParameter::new("message", ParamType::String, "Сообщение коммита", true)],
+        )
+        .write()
+    }
+    async fn call(&self, call: &ToolCall) -> ToolResult {
+        let Some(message) = call.arg_str("message") else {
+            return ToolResult::rejected("git_commit", "не передан `message`");
+        };
+        self.ctx
+            .git("git_commit", &["commit", "-m", &message])
+            .await
+    }
+}

@@ -1,70 +1,104 @@
-//! `herta-voice` — озвучивание ответов (TTS) через системные утилиты.
+//! `herta-voice` — озвучивание ответов (TTS).
 //!
-//! Намеренно без нативных аудио-зависимостей (cpal/alsa и т.п.): синтез речи
-//! делегируется внешней программе ОС, которая определяется автоматически и
-//! переопределяется конфигом. Это сохраняет лёгкость сборки и зелёный CI.
+//! Три бэкенда:
+//! - **System** — системная утилита (`say`/`espeak-ng`/PowerShell), без сети;
+//! - **ElevenLabs** — облачный синтез (нужен API-ключ);
+//! - **GoogleCloud** — Google Cloud Text-to-Speech (нужен API-ключ).
+//!
+//! Облачные бэкенды получают аудио по HTTP (rustls, без нативных аудио-зависимостей),
+//! пишут во временный файл и проигрывают системным плеером. `speak` не блокирует
+//! UI: системный бэкенд запускает процесс, облачные — отдельную `tokio`-таску.
 //! Распознавание речи (STT) — задача следующей итерации.
-//!
-//! `speak` запускает процесс в фоне (fire-and-forget) и не блокирует UI.
 
 #![forbid(unsafe_code)]
 
-use herta_core::config::VoiceConfig;
+mod cloud;
+
+use herta_core::config::{TtsProvider, VoiceConfig};
 use std::process::{Command, Stdio};
 
-/// Бэкенд озвучивания, выбранный для текущей платформы.
+/// Бэкенд озвучивания.
 #[derive(Debug, Clone)]
 pub struct Voice {
     enabled: bool,
+    provider: TtsProvider,
     program: Option<String>,
     voice_name: Option<String>,
+    cfg: VoiceConfig,
+    http: reqwest::Client,
 }
 
 impl Voice {
-    /// Собрать из конфигурации. Если TTS-команда не задана и не найдена —
-    /// озвучивание тихо отключается (без ошибок).
+    /// Собрать из конфигурации.
     pub fn from_config(cfg: &VoiceConfig) -> Self {
         let program = cfg.tts_command.clone().or_else(detect_tts);
+        let available = match cfg.provider {
+            TtsProvider::System => program.is_some(),
+            TtsProvider::ElevenLabs => cfg.elevenlabs_api_key.is_some(),
+            TtsProvider::GoogleCloud => cfg.google_api_key.is_some(),
+        };
         Self {
-            enabled: cfg.enabled && program.is_some(),
+            enabled: cfg.enabled && available,
+            provider: cfg.provider,
             program,
             voice_name: cfg.voice_name.clone(),
+            cfg: cfg.clone(),
+            http: reqwest::Client::new(),
         }
     }
 
+    /// Доступен ли выбранный бэкенд (есть утилита/ключ).
     pub fn is_available(&self) -> bool {
-        self.program.is_some()
+        match self.provider {
+            TtsProvider::System => self.program.is_some(),
+            TtsProvider::ElevenLabs => self.cfg.elevenlabs_api_key.is_some(),
+            TtsProvider::GoogleCloud => self.cfg.google_api_key.is_some(),
+        }
     }
 
     pub fn is_enabled(&self) -> bool {
         self.enabled
     }
 
-    /// Озвучить текст. Пустой текст или отсутствие бэкенда — no-op.
-    /// Процесс запускается отдельно и не блокирует вызывающего.
+    pub fn provider(&self) -> TtsProvider {
+        self.provider
+    }
+
+    /// Озвучить текст. Пустой текст или недоступный бэкенд — no-op.
     pub fn speak(&self, text: &str) {
         let trimmed = text.trim();
         if trimmed.is_empty() {
             return;
         }
-        let Some(program) = &self.program else { return };
-        if let Err(e) = self.spawn(program, trimmed) {
-            tracing::warn!(error = %e, program, "TTS не запустился");
+        match self.provider {
+            TtsProvider::System => self.speak_system(trimmed),
+            TtsProvider::ElevenLabs | TtsProvider::GoogleCloud => {
+                let voice = self.clone();
+                let owned = trimmed.to_string();
+                // Облачный синтез асинхронный — не блокируем вызывающего.
+                tokio::spawn(async move {
+                    if let Err(e) =
+                        cloud::synthesize_and_play(&voice.http, &voice.cfg, voice.provider, &owned)
+                            .await
+                    {
+                        tracing::warn!(error = %e, "облачный TTS не удался");
+                    }
+                });
+            }
         }
     }
 
-    fn spawn(&self, program: &str, text: &str) -> std::io::Result<()> {
+    fn speak_system(&self, text: &str) {
+        let Some(program) = &self.program else { return };
+        if let Err(e) = self.spawn_system(program, text) {
+            tracing::warn!(error = %e, program, "системный TTS не запустился");
+        }
+    }
+
+    fn spawn_system(&self, program: &str, text: &str) -> std::io::Result<()> {
         let mut cmd = Command::new(program);
-        // Аргументы под конкретные утилиты.
         match program {
-            "say" => {
-                // macOS: say [-v voice] "текст"
-                if let Some(v) = &self.voice_name {
-                    cmd.arg("-v").arg(v);
-                }
-                cmd.arg(text);
-            }
-            "espeak" | "espeak-ng" => {
+            "say" | "espeak" | "espeak-ng" => {
                 if let Some(v) = &self.voice_name {
                     cmd.arg("-v").arg(v);
                 }
@@ -74,7 +108,6 @@ impl Voice {
                 cmd.arg("--wait").arg(text);
             }
             "powershell" | "pwsh" => {
-                // Windows SAPI через инлайн-скрипт. Текст экранируется одинарными кавычками.
                 let escaped = text.replace('\'', "''");
                 let script = format!(
                     "Add-Type -AssemblyName System.Speech; \
@@ -83,7 +116,6 @@ impl Voice {
                 cmd.arg("-NoProfile").arg("-Command").arg(script);
             }
             _ => {
-                // Неизвестная пользовательская команда: передаём текст одним аргументом.
                 cmd.arg(text);
             }
         }
@@ -103,16 +135,14 @@ fn detect_tts() -> Option<String> {
     #[cfg(all(unix, not(target_os = "macos")))]
     let candidates = ["espeak-ng", "espeak", "spd-say"];
 
-    for candidate in candidates {
-        if which(candidate) {
-            return Some(candidate.to_string());
-        }
-    }
-    None
+    candidates
+        .into_iter()
+        .find(|c| which(c))
+        .map(|c| c.to_string())
 }
 
 /// Есть ли исполняемый файл в PATH (без внешних зависимостей).
-fn which(program: &str) -> bool {
+pub(crate) fn which(program: &str) -> bool {
     let Some(path) = std::env::var_os("PATH") else {
         return false;
     };
@@ -137,21 +167,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn disabled_when_no_backend() {
+    fn system_disabled_without_backend() {
         let cfg = VoiceConfig {
             enabled: true,
-            tts_command: Some("definitely-not-a-real-tts-xyz".into()),
-            voice_name: None,
+            ..Default::default()
         };
         let voice = Voice::from_config(&cfg);
-        // Команда задана явно, поэтому считается доступной (проверка наличия — при запуске).
-        assert!(voice.is_available());
-        // speak с пустым текстом — гарантированный no-op без паники.
+        // На сборочной машине TTS-утилиты может не быть — speak пустой строки безопасен.
         voice.speak("   ");
     }
 
     #[test]
-    fn detect_does_not_panic() {
-        let _ = detect_tts();
+    fn elevenlabs_needs_key() {
+        let cfg = VoiceConfig {
+            enabled: true,
+            provider: TtsProvider::ElevenLabs,
+            ..Default::default()
+        };
+        let voice = Voice::from_config(&cfg);
+        assert!(!voice.is_available());
+        assert!(!voice.is_enabled());
     }
 }

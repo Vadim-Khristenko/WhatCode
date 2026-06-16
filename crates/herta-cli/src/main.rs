@@ -100,6 +100,7 @@ async fn run_tui(config: AppConfig) -> anyhow::Result<()> {
     let registry = Arc::new(herta_tools::build_registry(
         &config,
         Arc::clone(&long_memory),
+        config.mode,
     ));
 
     let supervisor = Supervisor::new(
@@ -135,7 +136,7 @@ async fn run_oneshot(config: &AppConfig, prompt: &str) -> anyhow::Result<()> {
     client.warm_up().await?;
 
     let (long_memory, mem_block) = load_long_memory(config);
-    let registry: ToolRegistry = herta_tools::build_registry(config, long_memory);
+    let registry: ToolRegistry = herta_tools::build_registry(config, long_memory, config.mode);
 
     let mut messages =
         persona::build_bootstrap_messages(Some(client.model_name()), mem_block.as_deref());

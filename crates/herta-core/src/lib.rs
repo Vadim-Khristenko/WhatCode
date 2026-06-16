@@ -17,6 +17,7 @@ pub mod error;
 pub mod long_memory;
 pub mod memory;
 pub mod message;
+pub mod mode;
 pub mod persona;
 pub mod skill;
 pub mod tool;
@@ -27,6 +28,7 @@ pub use error::{HertaError, Result};
 pub use long_memory::{Fact, FactCategory, FactSource, LongMemoryStore};
 pub use memory::DialogueMemory;
 pub use message::{estimate_tokens, estimate_total_tokens, Message, Role};
+pub use mode::{AgentMode, Permission, PermissionLedger, Policy, ToolRisk};
 pub use skill::{load_dir as load_skills, Skill};
 pub use tool::{ParamType, ToolCall, ToolParameter, ToolResult, ToolSpec};
 

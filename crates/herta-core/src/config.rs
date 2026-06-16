@@ -360,14 +360,47 @@ impl Default for AgentConfig {
 
 /// Озвучивание ответов (TTS). Реализация — внешняя системная утилита, поэтому
 /// нативных зависимостей нет. STT (распознавание) — задача следующей итерации.
+/// Провайдер синтеза речи.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TtsProvider {
+    /// Системная утилита (say/espeak-ng/PowerShell) — без сетевых зависимостей.
+    #[default]
+    System,
+    /// ElevenLabs (облачный, требует API-ключ).
+    ElevenLabs,
+    /// Google Cloud Text-to-Speech (облачный, требует API-ключ).
+    GoogleCloud,
+}
+
+impl TtsProvider {
+    pub fn parse(s: &str) -> Self {
+        match s.trim().to_lowercase().as_str() {
+            "elevenlabs" | "eleven" => Self::ElevenLabs,
+            "google" | "google_cloud" | "gcloud" => Self::GoogleCloud,
+            _ => Self::System,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct VoiceConfig {
     /// Озвучивать ответы Герты автоматически.
     pub enabled: bool,
-    /// Явная команда TTS (переопределяет автоопределение по ОС).
+    /// Выбранный провайдер синтеза речи.
+    pub provider: TtsProvider,
+    /// Явная команда TTS для System-провайдера (иначе автоопределение по ОС).
     pub tts_command: Option<String>,
-    /// Имя голоса (для систем, где это применимо, напр. macOS `say -v`).
+    /// Имя голоса для System-провайдера (напр. macOS `say -v`).
     pub voice_name: Option<String>,
+    /// ElevenLabs: ключ, id голоса, модель.
+    pub elevenlabs_api_key: Option<String>,
+    pub elevenlabs_voice_id: Option<String>,
+    pub elevenlabs_model: Option<String>,
+    /// Google Cloud TTS: ключ, имя голоса, язык.
+    pub google_api_key: Option<String>,
+    pub google_voice: Option<String>,
+    pub google_language: Option<String>,
 }
 
 /// Корневая конфигурация приложения.
@@ -392,6 +425,8 @@ pub struct AppConfig {
     pub context: ContextConfig,
     pub agent: AgentConfig,
     pub voice: VoiceConfig,
+    /// Стартовый режим работы агента.
+    pub mode: crate::mode::AgentMode,
 }
 
 impl Default for AppConfig {
@@ -434,6 +469,7 @@ impl Default for AppConfig {
             context: ContextConfig::default(),
             agent: AgentConfig::default(),
             voice: VoiceConfig::default(),
+            mode: crate::mode::AgentMode::Auto,
         }
     }
 }
@@ -584,9 +620,20 @@ impl AppConfig {
 
         cfg.voice = VoiceConfig {
             enabled: env_bool("VOICE_ENABLED", false),
+            provider: crate::config::TtsProvider::parse(&env_str("VOICE_PROVIDER", "system")),
             tts_command: env_opt("VOICE_TTS_COMMAND"),
             voice_name: env_opt("VOICE_NAME"),
+            elevenlabs_api_key: env_opt("ELEVENLABS_API_KEY"),
+            elevenlabs_voice_id: env_opt("ELEVENLABS_VOICE_ID"),
+            elevenlabs_model: env_opt("ELEVENLABS_MODEL"),
+            google_api_key: env_opt("GOOGLE_TTS_API_KEY").or_else(|| env_opt("GOOGLE_AI_API_KEY")),
+            google_voice: env_opt("GOOGLE_TTS_VOICE"),
+            google_language: env_opt("GOOGLE_TTS_LANGUAGE"),
         };
+
+        cfg.mode = env_opt("HERTA_MODE")
+            .and_then(|m| crate::mode::AgentMode::parse(&m))
+            .unwrap_or(crate::mode::AgentMode::Auto);
 
         cfg
     }

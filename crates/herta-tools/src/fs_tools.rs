@@ -113,3 +113,111 @@ impl Tool for ListDirTool {
         ToolResult::ok("list_dir", listing)
     }
 }
+
+/// `write_file` — записать (перезаписать) текстовый файл в пределах проекта.
+#[derive(Default)]
+pub struct WriteFileTool;
+
+#[async_trait]
+impl Tool for WriteFileTool {
+    fn spec(&self) -> ToolSpec {
+        ToolSpec::new(
+            "write_file",
+            "Создать или полностью перезаписать текстовый файл относительно корня проекта. \
+             Путь не должен выходить за пределы проекта и содержать `..`. Родительские каталоги \
+             создаются автоматически. Для точечных правок предпочитай прочитать файл (read_file), \
+             затем записать целиком.",
+            vec![
+                ToolParameter::new(
+                    "path",
+                    ParamType::String,
+                    "Путь к файлу относительно корня проекта",
+                    true,
+                ),
+                ToolParameter::new(
+                    "content",
+                    ParamType::String,
+                    "Полное новое содержимое файла",
+                    true,
+                ),
+            ],
+        )
+        .write()
+    }
+
+    async fn call(&self, call: &ToolCall) -> ToolResult {
+        let Some(rel) = call.arg_str("path") else {
+            return ToolResult::rejected("write_file", "не передан `path`");
+        };
+        let content = call.arg_str("content").unwrap_or_default();
+        let Some(path) = resolve(&rel) else {
+            return ToolResult::rejected("write_file", "путь вне корня проекта или содержит `..`");
+        };
+        if let Some(parent) = path.parent() {
+            if let Err(e) = tokio::fs::create_dir_all(parent).await {
+                return ToolResult::rejected("write_file", format!("каталог недоступен: {e}"));
+            }
+        }
+        match tokio::fs::write(&path, content).await {
+            Ok(_) => ToolResult::ok("write_file", format!("Записан файл: {rel}")),
+            Err(e) => ToolResult::rejected("write_file", format!("не удалось записать: {e}")),
+        }
+    }
+}
+
+/// `append_file` — дописать текст в конец файла (создаёт при отсутствии).
+#[derive(Default)]
+pub struct AppendFileTool;
+
+#[async_trait]
+impl Tool for AppendFileTool {
+    fn spec(&self) -> ToolSpec {
+        ToolSpec::new(
+            "append_file",
+            "Дописать текст в конец текстового файла относительно корня проекта (создаёт файл, \
+             если его нет). Путь не должен выходить за пределы проекта. Используй для логов, \
+             заметок и постепенного наполнения файлов.",
+            vec![
+                ToolParameter::new(
+                    "path",
+                    ParamType::String,
+                    "Путь к файлу относительно корня проекта",
+                    true,
+                ),
+                ToolParameter::new(
+                    "content",
+                    ParamType::String,
+                    "Текст для добавления в конец",
+                    true,
+                ),
+            ],
+        )
+        .write()
+    }
+
+    async fn call(&self, call: &ToolCall) -> ToolResult {
+        use tokio::io::AsyncWriteExt;
+        let Some(rel) = call.arg_str("path") else {
+            return ToolResult::rejected("append_file", "не передан `path`");
+        };
+        let content = call.arg_str("content").unwrap_or_default();
+        let Some(path) = resolve(&rel) else {
+            return ToolResult::rejected("append_file", "путь вне корня проекта или содержит `..`");
+        };
+        if let Some(parent) = path.parent() {
+            let _ = tokio::fs::create_dir_all(parent).await;
+        }
+        let file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .await;
+        match file {
+            Ok(mut f) => match f.write_all(content.as_bytes()).await {
+                Ok(_) => ToolResult::ok("append_file", format!("Дописан файл: {rel}")),
+                Err(e) => ToolResult::rejected("append_file", format!("ошибка записи: {e}")),
+            },
+            Err(e) => ToolResult::rejected("append_file", format!("не удалось открыть: {e}")),
+        }
+    }
+}

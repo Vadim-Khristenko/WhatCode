@@ -62,6 +62,8 @@ fn render_header(frame: &mut Frame, area: Rect, state: &AppState, theme: &Theme)
         Span::styled(&state.provider_label, Style::default().fg(theme.accent)),
         Span::styled("  модель ", theme.dim()),
         Span::styled(&state.model_label, Style::default().fg(theme.herta)),
+        Span::styled("  режим ", theme.dim()),
+        Span::styled(&state.mode_label, Style::default().fg(theme.warning)),
     ]);
     let para = Paragraph::new(Text::from(vec![title, meta]));
     frame.render_widget(para, inner);
@@ -285,6 +287,18 @@ pub fn render_help(frame: &mut Frame, theme: &Theme) {
         )),
         Line::from(""),
         Line::from(Span::styled("Команды:", theme.title())),
+        Line::from(Span::styled(
+            "/mode <режим>   chat|plan|code|auto|full-auto",
+            theme.dim(),
+        )),
+        Line::from(Span::styled(
+            "/allow <инстр>  разрешить (или all)",
+            theme.dim(),
+        )),
+        Line::from(Span::styled(
+            "/deny <инстр>   отклонить инструмент",
+            theme.dim(),
+        )),
         Line::from(Span::styled(
             "/goal <текст>   задать цель и план",
             theme.dim(),

@@ -74,6 +74,7 @@ impl Tool for OpenUrlTool {
                 false,
             )],
         )
+        .write()
     }
 
     async fn call(&self, call: &ToolCall) -> ToolResult {
@@ -119,6 +120,7 @@ impl Tool for CreateNoteTool {
                 ToolParameter::new("content", ParamType::String, "Содержимое заметки", false),
             ],
         )
+        .write()
     }
 
     async fn call(&self, call: &ToolCall) -> ToolResult {

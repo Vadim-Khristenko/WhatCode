@@ -34,6 +34,7 @@ impl Tool for RememberTool {
                 ToolParameter::new("category", ParamType::String, "user | project | preferences | notes", false),
             ],
         )
+        .write()
     }
 
     async fn call(&self, call: &ToolCall) -> ToolResult {
@@ -69,37 +70,50 @@ impl Tool for RecallTool {
     fn spec(&self) -> ToolSpec {
         ToolSpec::new(
             "recall",
-            "Вспомнить сохранённые факты, опционально по категории.",
-            vec![ToolParameter::new(
-                "category",
-                ParamType::String,
-                "user | project | preferences | notes",
-                false,
-            )],
+            "Вспомнить сохранённые факты. Необязательно сузить по категории и/или по подстроке \
+             поиска `query` (регистронезависимо). Используй, чтобы достать ранее сохранённый \
+             контекст о пользователе или проекте.",
+            vec![
+                ToolParameter::new(
+                    "category",
+                    ParamType::String,
+                    "user | project | preferences | notes",
+                    false,
+                ),
+                ToolParameter::new(
+                    "query",
+                    ParamType::String,
+                    "Подстрока для поиска по фактам",
+                    false,
+                ),
+            ],
         )
     }
 
     async fn call(&self, call: &ToolCall) -> ToolResult {
         let store = self.store.lock().await;
-        let listing = match call.arg_str("category") {
-            Some(cat) => {
-                let category = FactCategory::parse(&cat);
-                store
-                    .by_category(category)
-                    .iter()
-                    .map(|f| format!("- {}", f.content))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            }
-            None => store
-                .all_facts()
-                .iter()
-                .map(|f| format!("- {}", f.content))
-                .collect::<Vec<_>>()
-                .join("\n"),
+        let query = call.arg_str("query").map(|q| q.to_lowercase());
+
+        let mut facts: Vec<&herta_core::Fact> = match call.arg_str("category") {
+            Some(cat) => store.by_category(FactCategory::parse(&cat)),
+            None => store.all_facts().iter().collect(),
         };
+        if let Some(q) = &query {
+            facts.retain(|f| f.content.to_lowercase().contains(q));
+        }
+
+        let listing = facts
+            .iter()
+            .map(|f| format!("- {}", f.content))
+            .collect::<Vec<_>>()
+            .join("\n");
         if listing.is_empty() {
-            ToolResult::ok("recall", "Пока ничего не сохранено.")
+            let msg = if query.is_some() {
+                "Совпадений не найдено."
+            } else {
+                "Пока ничего не сохранено."
+            };
+            ToolResult::ok("recall", msg)
         } else {
             ToolResult::ok("recall", listing)
         }
@@ -130,6 +144,7 @@ impl Tool for ForgetTool {
                 true,
             )],
         )
+        .write()
     }
 
     async fn call(&self, call: &ToolCall) -> ToolResult {

@@ -83,6 +83,7 @@ impl App {
 
         let mut state = AppState::new(provider, model, context_limit);
         state.context_used = estimate_total_tokens(&conversation);
+        state.mode_label = registry.mode().as_str().to_string();
         let tool_count = registry.len();
         if tool_count > 0 {
             state.push_line(ChatLine::notice(format!(
@@ -344,6 +345,55 @@ impl App {
                         .push_line(ChatLine::notice("Использование: /agent <описание задачи>"));
                 } else {
                     self.spawn_agent("задача", tail);
+                }
+            }
+            "mode" => {
+                if tail.is_empty() {
+                    let m = self.registry.mode();
+                    self.state.push_line(ChatLine::notice(format!(
+                        "Режим: {} — {}. Доступные: chat | plan | code | auto | full-auto",
+                        m.as_str(),
+                        m.description()
+                    )));
+                } else if let Some(mode) = herta_core::AgentMode::parse(tail) {
+                    self.registry.set_mode(mode);
+                    self.state.mode_label = mode.as_str().to_string();
+                    self.state.push_line(ChatLine::notice(format!(
+                        "Режим переключён: {} — {}",
+                        mode.as_str(),
+                        mode.description()
+                    )));
+                } else {
+                    self.state.push_line(ChatLine::notice(
+                        "Неизвестный режим. Доступные: chat | plan | code | auto | full-auto",
+                    ));
+                }
+            }
+            "allow" => {
+                if tail.is_empty() {
+                    self.state.push_line(ChatLine::notice(
+                        "Использование: /allow <инструмент> | /allow all",
+                    ));
+                } else if tail.eq_ignore_ascii_case("all") {
+                    self.registry.allow_everything();
+                    self.state
+                        .push_line(ChatLine::notice("Разрешены все инструменты на эту сессию."));
+                } else {
+                    self.registry.allow_tool(tail);
+                    self.state.push_line(ChatLine::notice(format!(
+                        "Разрешён инструмент: {tail} (и все похожие вызовы)"
+                    )));
+                }
+            }
+            "deny" => {
+                if tail.is_empty() {
+                    self.state
+                        .push_line(ChatLine::notice("Использование: /deny <инструмент>"));
+                } else {
+                    self.registry.deny_tool(tail);
+                    self.state.push_line(ChatLine::notice(format!(
+                        "Отклонён инструмент: {tail} (и все похожие вызовы)"
+                    )));
                 }
             }
             "compact" => self.force_compact(),

@@ -59,6 +59,13 @@ pub struct ToolSpec {
     pub parameters: Vec<ToolParameter>,
     /// Деструктивные инструменты по умолчанию блокируются реестром.
     pub destructive: bool,
+    /// Уровень риска для системы режимов и разрешений (по умолчанию ReadOnly).
+    #[serde(default = "default_risk")]
+    pub risk: crate::mode::ToolRisk,
+}
+
+fn default_risk() -> crate::mode::ToolRisk {
+    crate::mode::ToolRisk::ReadOnly
 }
 
 impl ToolSpec {
@@ -72,11 +79,20 @@ impl ToolSpec {
             description: description.into(),
             parameters,
             destructive: false,
+            risk: crate::mode::ToolRisk::ReadOnly,
         }
     }
 
+    /// Пометить инструмент как пишущий (мутирует файлы/состояние проекта).
+    pub fn write(mut self) -> Self {
+        self.risk = crate::mode::ToolRisk::Write;
+        self
+    }
+
+    /// Пометить инструмент как деструктивный/опасный (установка ПО, произвольные команды).
     pub fn destructive(mut self) -> Self {
         self.destructive = true;
+        self.risk = crate::mode::ToolRisk::Dangerous;
         self
     }
 

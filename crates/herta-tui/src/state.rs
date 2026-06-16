@@ -77,6 +77,8 @@ pub struct AppState {
     pub should_quit: bool,
     pub provider_label: String,
     pub model_label: String,
+    /// Текущий режим работы (chat/plan/code/auto/full-auto).
+    pub mode_label: String,
     /// Оценка занятости контекстного окна, токены.
     pub context_used: usize,
     pub context_limit: usize,
@@ -101,6 +103,7 @@ impl AppState {
             should_quit: false,
             provider_label: provider_label.into(),
             model_label: model_label.into(),
+            mode_label: "auto".into(),
             context_used: 0,
             context_limit: context_limit.max(1),
         }
