@@ -1,8 +1,74 @@
 # The Herta Voice Assistant
 
-Локальный голосовой ассистент в образе Великой Герты из Honkai: Star Rail. **Текущая версия: v0.3.**
+Локальный голосовой ассистент в образе Великой Герты из Honkai: Star Rail.
 
-Работает на **Windows** и **Linux**. Ниже даны отдельные пошаговые инструкции для каждой системы.
+> ## ⚙️ Идёт порт на Rust (ветка `rust-by-default`)
+>
+> Проект мигрирует с Python на **Rust** ради производительности, единого бинаря и
+> кроссплатформенной сборки. Новый код живёт в Cargo-воркспейсе `crates/`.
+> Python-версия пока сохраняется для совместимости, но является устаревшей.
+>
+> **Быстрый старт (Rust):**
+> ```bash
+> cargo build --release            # собрать
+> cargo run -p herta-cli           # запустить TUI
+> cargo run -p herta-cli -- --text "Кто ты?"   # одноразовый запрос
+> cargo run -p herta-cli -- doctor # самодиагностика
+> cargo test                       # тесты
+> ```
+>
+> **Архитектура воркспейса:**
+>
+> | Crate | Ответственность |
+> |-------|-----------------|
+> | `herta-core` | ошибки, сообщения, конфиг, персона+лор, память, автосжатие контекста, формат навыков `.herta` |
+> | `herta-llm` | трейт `ChatClient` + Ollama / OpenAI-совместимые / Google AI / **Anthropic (Claude)** |
+> | `herta-tools` | реестр инструментов: git, файлы, fetch_url, время, память, веб-поиск, анализ кода, системные действия, навыки |
+> | `herta-agent` | оркестрация саб-агентов + **нативный tool-loop** |
+> | `herta-tui` | современный TUI на ratatui/crossterm, панель агентов, команды `/goal /ask /tools /compact /say` |
+> | `herta-voice` | озвучивание ответов (TTS) через системные утилиты |
+> | `herta-cli` | бинарь `herta` (TUI / `--text` / `doctor`) |
+>
+> **Инструменты агента:** `git_status/log/diff/branches`, `read_file`, `list_dir`,
+> `fetch_url`, `current_time`, `web_search`, `type_check`/`lint_code`,
+> `open_url`/`create_note`, `remember`/`recall`/`forget`, `list_skills`/`use_skill`.
+> Все с детальными описаниями, чтобы любая LLM понимала, когда их применять.
+>
+> Подробности: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) ·
+> досье персонажа: [`docs/HERTA.md`](docs/HERTA.md) ·
+> авторы: [`AUTHORS.md`](AUTHORS.md).
+>
+> **Режимы работы** (как в Claude Code): `chat` (чистый разговор), `plan`
+> (только чтение/планирование), `code` (разработка; запись и опасное — по
+> разрешению), `auto` (чтение+запись авто, опасное запрещено), `full-auto`
+> (полный доступ). Переключение: `/mode <режим>`. Разрешения: `/allow <инстр>`
+> (или `/allow all`), `/deny <инстр>`.
+>
+> **Автономная разработка:** `cargo_check/build/test/clippy/fmt/add/run` для Rust,
+> `uv_run/add/sync/pip` для Python, `install_toolchain` (rustup/uv/python,
+> на Windows — подсказки winget для Rust и VS Build Tools).
+>
+> **Озвучивание (TTS):** `system` (say/espeak/PowerShell), `elevenlabs`,
+> `google_cloud` — выбор через `VOICE_PROVIDER`.
+>
+> Rust-версию разрабатывает **Vadim Khristenko** ([Telegram](https://t.me/vscreator_life)).
+> Оригинальный проект (Python) — **phaeton_oq**:
+> [GitHub](https://github.com/phaeton-oq/The-Herta-voice-assistant) ·
+> [Telegram](https://t.me/cmd_phaeton_oq).
+>
+> **Релизы** собираются GitHub Actions при пуше тега `v*` под Windows, macOS,
+> Linux (tarball + `.deb` + AUR PKGBUILD + Nix flake) и Android (best-effort).
+
+---
+
+## Python-версия (устаревшая) — v0.3
+
+> ⚠️ Идёт чистка Python-кода. Полностью портированные на Rust модули (`config.py`,
+> `persona/`, `brain/`, `llm/`, `actions/`, `main.py`, `doctor.py`) удалены — они
+> доступны в истории git. Временно сохранены как референс для будущего порта
+> аудио-пайплайна: `audio/`, `stt/`, `tts/`, `wakeword/`, `utils/`, `tools/`.
+
+Инструкции ниже относятся к историческим запускам Python-версии.
 
 Текущий фокус:
 - локальный пайплайн без лишней инфраструктуры
