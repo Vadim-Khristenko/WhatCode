@@ -1,0 +1,9 @@
+# WhatCode — cargo configuration.
+# Раскомментируйте и настройте пути при необходимости сборки под Android.
+
+# [target.aarch64-linux-android]
+# linker = "C:/path/to/android-ndk/toolchains/llvm/prebuilt/windows-x86_64/bin/aarch64-linux-android30-clang.cmd"
+#
+# [env]
+# CC_aarch64_linux_android = "C:/path/to/android-ndk/toolchains/llvm/prebuilt/windows-x86_64/bin/aarch64-linux-android30-clang.cmd"
+# AR_aarch64_linux_android = "C:/path/to/android-ndk/toolchains/llvm/prebuilt/windows-x86_64/bin/llvm-ar.exe"

@@ -12,7 +12,7 @@
         pkgs = import nixpkgs { inherit system; };
         whatcode = pkgs.rustPlatform.buildRustPackage {
           pname = "whatcode";
-          version = "0.5.0";
+          version = "0.6.0";
           src = self;
           cargoLock.lockFile = ./Cargo.lock;
           # rustls/ring — нативный OpenSSL не нужен.

@@ -2,7 +2,7 @@
 
 Все заметные изменения Rust-версии WhatCode.
 
-## [Unreleased / 0.6.0] — Rebrand & Persona System
+## [0.6.0] — 2026-06-30
 
 ### Ребрендинг
 - Проект переименован из `The Herta` / `herta-*` в **WhatCode** / `whatcode-*`.
@@ -21,7 +21,29 @@
 ### TUI
 - Улучшен адаптивный терминальный интерфейс с переключением акцентных цветов
   под активную персону.
-- Улучшен пользовательский опыт и дизайн некоторых частей интерфейса
+- Улучшен пользовательский опыт и дизайн некоторых частей интерфейса.
+
+### Инструменты
+- Рефакторинг `whatcode-tools`: инструменты Git разбиты на `git/read`, `git/write`,
+  `git/advanced` с единым `GitContext`.
+- Добавлен полный набор Git-инструментов: status, log, diff, diff staged, branches,
+  remote, add, reset HEAD, commit, push, pull, checkout, stash, reset, revert,
+  rebase, cherry-pick, clean, merge, rollback commit, sync branch, savepoint.
+- Добавлены инструменты сборки: `cargo_*`, `uv_*`, `bun_*`, `verify_build`, `project_info`.
+
+### LLM-провайдеры
+- Добавлен **Fireworks AI** (OpenAI-совместимый).
+- Добавлен **OpenCode Go** (OpenAI-совместимый endpoint `https://opencode.ai/zen/go/v1`).
+
+### Voice
+- Добавлен Edge TTS (`TtsProvider::Edge`) через `edge-tts` CLI.
+- Добавлен базовый текстовый wake-word detector в `whatcode-core::wakeword`.
+- Удалены устаревшие Python-модули: `stt/`, `utils/logger.py`, `tts/edge_tts_engine.py`,
+  `wakeword/matcher.py`, `wakeword/coordinator.py`.
+
+### Навыки
+- Переписаны `goal-planning`, `context-compaction`, `code-review` с реальными примерами.
+- Добавлены `detailed-debugging`, `test-design`, `refactoring`, `git-workflow`.
 
 ## [0.5.0] — 2026-06-16
 

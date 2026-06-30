@@ -1970,7 +1970,7 @@ dependencies = [
 
 [[package]]
 name = "whatcode-agent"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "tokio",
@@ -1983,7 +1983,7 @@ dependencies = [
 
 [[package]]
 name = "whatcode-cli"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2000,7 +2000,7 @@ dependencies = [
 
 [[package]]
 name = "whatcode-core"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "chrono",
  "directories",
@@ -2014,7 +2014,7 @@ dependencies = [
 
 [[package]]
 name = "whatcode-llm"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "futures",
@@ -2029,7 +2029,7 @@ dependencies = [
 
 [[package]]
 name = "whatcode-tools"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2044,7 +2044,7 @@ dependencies = [
 
 [[package]]
 name = "whatcode-tui"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "crossterm",
  "futures",
@@ -2060,7 +2060,7 @@ dependencies = [
 
 [[package]]
 name = "whatcode-voice"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "base64",
  "reqwest",
