@@ -1,0 +1,17 @@
+[package]
+name = "whatcode-agent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Sub-agent orchestration (parallel, streaming) for WhatCode"
+
+[dependencies]
+whatcode-core.workspace = true
+whatcode-llm.workspace = true
+whatcode-tools.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+uuid.workspace = true

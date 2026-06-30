@@ -1,0 +1,16 @@
+[package]
+name = "whatcode-voice"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Voice output (TTS) for WhatCode: system utilities, ElevenLabs, Google Cloud"
+
+[dependencies]
+whatcode-core.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+serde_json.workspace = true
+base64 = "0.22"
+tracing.workspace = true

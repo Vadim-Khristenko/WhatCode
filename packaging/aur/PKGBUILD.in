@@ -1,21 +1,21 @@
 # Maintainer: VAI PROG <vadim@vai-rice.space>
 # Шаблон PKGBUILD. CI подставляет @VERSION@ и @URL@ при релизе.
-pkgname=herta-voiceassistant-bin
+pkgname=whatcode-bin
 pkgver=@VERSION@
 pkgrel=1
-pkgdesc="Великая Герта — голосовой ассистент и TUI на Rust (персона Honkai: Star Rail)"
+pkgdesc="WhatCode — ассистент для разработки и TUI на Rust с выбираемыми персонами"
 arch=('x86_64')
-url="https://github.com/vadim-khristenko/the-herta-voiceassistant-pwd-by-rust"
+url="https://github.com/vadim-khristenko/WhatCode"
 license=('MIT')
-provides=('herta')
-conflicts=('herta')
+provides=('whatcode')
+conflicts=('whatcode')
 options=('!strip')
 source=("@URL@")
 sha256sums=('SKIP')
 
 package() {
-    install -Dm755 "${srcdir}/herta-${pkgver}-x86_64-unknown-linux-gnu/herta" \
-        "${pkgdir}/usr/bin/herta"
-    install -Dm644 "${srcdir}/herta-${pkgver}-x86_64-unknown-linux-gnu/README.md" \
+    install -Dm755 "${srcdir}/whatcode-${pkgver}-x86_64-unknown-linux-gnu/whatcode" \
+        "${pkgdir}/usr/bin/whatcode"
+    install -Dm644 "${srcdir}/whatcode-${pkgver}-x86_64-unknown-linux-gnu/README.md" \
         "${pkgdir}/usr/share/doc/${pkgname}/README.md" 2>/dev/null || true
 }

@@ -51,3 +51,4 @@ data/
 # Local model and cache directories if added later
 models/
 .cache/
+docs/superpowers/
