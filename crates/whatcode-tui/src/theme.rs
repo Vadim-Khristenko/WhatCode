@@ -1,7 +1,10 @@
 //! Тема оформления. Все цвета — явные `Color::Rgb`, никаких магических ANSI-строк.
-//! Палитра «ледяной эрудиции»: глубокий космос, морозный циан, аметист Эона.
+//! Палитра адаптируется под активную персону: белый по умолчанию, фиолетовый для
+//! Герты, жёлтый для Anis. Остальные цвета — глубокий космос, мягкие границы,
+//! читаемый текст.
 
 use ratatui::style::{Color, Modifier, Style};
+use whatcode_core::persona::PersonaColor;
 
 /// Неизменяемая палитра. Передаётся в виджеты по ссылке, не клонируется на кадр.
 #[derive(Debug, Clone, Copy)]
@@ -22,6 +25,21 @@ pub struct Theme {
 
 impl Default for Theme {
     fn default() -> Self {
+        Self::from_persona_color(PersonaColor::WHITE)
+    }
+}
+
+impl Theme {
+    /// Создать тему из персонализированного цвета. Остальная палитра остаётся
+    /// нейтральной, а `persona` и `accent` подстраиваются под цвет персоны.
+    pub fn from_persona_color(color: PersonaColor) -> Self {
+        let persona = Color::Rgb(color.r, color.g, color.b);
+        // accent чуть теплее/ярче persona для заголовков и акцентов.
+        let accent = if color == PersonaColor::WHITE {
+            Color::Rgb(137, 221, 255) // ледяной циан для нейтрального режима
+        } else {
+            persona
+        };
         Self {
             bg: Color::Rgb(13, 17, 28),
             surface: Color::Rgb(20, 26, 40),
@@ -29,17 +47,15 @@ impl Default for Theme {
             border_focused: Color::Rgb(122, 162, 247),
             text: Color::Rgb(205, 214, 244),
             text_dim: Color::Rgb(110, 122, 158),
-            persona: Color::Rgb(137, 221, 255),
+            persona,
             user: Color::Rgb(158, 206, 106),
-            accent: Color::Rgb(187, 154, 247),
+            accent,
             success: Color::Rgb(158, 206, 106),
             warning: Color::Rgb(224, 175, 104),
             error: Color::Rgb(247, 118, 142),
         }
     }
-}
 
-impl Theme {
     pub fn base(&self) -> Style {
         Style::default().fg(self.text).bg(self.bg)
     }
@@ -58,6 +74,12 @@ impl Theme {
             .add_modifier(Modifier::BOLD)
     }
 
+    pub fn header(&self) -> Style {
+        Style::default()
+            .fg(self.persona)
+            .add_modifier(Modifier::BOLD)
+    }
+
     pub fn dim(&self) -> Style {
         Style::default().fg(self.text_dim)
     }
@@ -68,5 +90,13 @@ impl Theme {
 
     pub fn user_label(&self) -> Style {
         Style::default().fg(self.user).add_modifier(Modifier::BOLD)
+    }
+
+    pub fn active_item(&self) -> Style {
+        Style::default().bg(self.surface).fg(self.persona)
+    }
+
+    pub fn subtle_surface(&self) -> Style {
+        Style::default().bg(self.surface).fg(self.text_dim)
     }
 }

@@ -7,7 +7,7 @@ use whatcode_agent::AgentStatus;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineKind {
     User,
-    Herta,
+    Persona,
     Notice,
     ErrorNote,
 }
@@ -26,9 +26,9 @@ impl ChatLine {
             text: text.into(),
         }
     }
-    pub fn herta(text: impl Into<String>) -> Self {
+    pub fn persona(text: impl Into<String>) -> Self {
         Self {
-            kind: LineKind::Herta,
+            kind: LineKind::Persona,
             text: text.into(),
         }
     }
@@ -82,6 +82,8 @@ pub struct AppState {
     /// Оценка занятости контекстного окна, токены.
     pub context_used: usize,
     pub context_limit: usize,
+    /// Имя активной персоны для отображения в TUI.
+    pub persona_name: String,
 }
 
 impl AppState {
@@ -89,11 +91,14 @@ impl AppState {
         provider_label: impl Into<String>,
         model_label: impl Into<String>,
         context_limit: usize,
+        persona_name: impl Into<String>,
     ) -> Self {
+        let persona_name = persona_name.into();
+        let welcome = format!(
+            "{persona_name} на связи. Печатайте запрос и жмите Enter. F1 — справка."
+        );
         Self {
-            lines: vec![ChatLine::notice(
-                "Великая Герта на связи. Печатайте запрос и жмите Enter. F1 — справка.",
-            )],
+            lines: vec![ChatLine::notice(welcome)],
             input: String::new(),
             agents: Vec::new(),
             status: "готова".into(),
@@ -106,6 +111,7 @@ impl AppState {
             mode_label: "auto".into(),
             context_used: 0,
             context_limit: context_limit.max(1),
+            persona_name,
         }
     }
 

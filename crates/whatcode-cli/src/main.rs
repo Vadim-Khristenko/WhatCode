@@ -103,10 +103,11 @@ async fn run_tui(config: AppConfig) -> anyhow::Result<()> {
         config.mode,
     ));
 
+    let selected_persona = persona::common::get(&config.persona);
     let supervisor = Supervisor::new(
         Arc::clone(&client),
         &config.agent,
-        persona::build_system_prompt(Some(client.model_name())),
+        selected_persona.system_prompt(Some(client.model_name())),
     );
     let ctx_manager = ContextManager::new(&config.context);
     let voice = whatcode_voice::Voice::from_config(&config.voice);
@@ -124,16 +125,21 @@ async fn run_tui(config: AppConfig) -> anyhow::Result<()> {
         config.recap_enabled,
         config.recap_every_turns,
         mem_block,
+        config.persona.clone(),
     );
     app.run().await?;
     Ok(())
 }
 
 async fn run_oneshot(config: &AppConfig, prompt: &str) -> anyhow::Result<()> {
+    let selected_persona = persona::common::get(&config.persona);
+
     // Быстрый ответ об идентичности без модели и без сети.
-    if persona::is_identity_query(prompt) {
-        println!("{}", persona::build_identity_reply(prompt));
-        return Ok(());
+    if selected_persona.is_identity_query(prompt) {
+        if let Some(reply) = selected_persona.build_identity_reply(prompt) {
+            println!("{}", reply);
+            return Ok(());
+        }
     }
 
     let client = whatcode_llm::build_client(config)?;
@@ -142,8 +148,8 @@ async fn run_oneshot(config: &AppConfig, prompt: &str) -> anyhow::Result<()> {
     let (long_memory, mem_block) = load_long_memory(config);
     let registry: ToolRegistry = whatcode_tools::build_registry(config, long_memory, config.mode);
 
-    let mut messages =
-        persona::build_bootstrap_messages(Some(client.model_name()), mem_block.as_deref());
+    let mut messages = selected_persona
+        .bootstrap_messages(Some(client.model_name()), mem_block.as_deref());
     // Кратковременная история для связности.
     let memory = DialogueMemory::new(
         &config.memory.path,

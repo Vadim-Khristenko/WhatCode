@@ -35,7 +35,8 @@ pub async fn run(config: &AppConfig) -> i32 {
     let mut fails = 0;
     let mut warns = 0;
 
-    println!("=== Диагностика «Великой Герты» ===\n");
+    println!("=== Диагностика WhatCode ===");
+    println!("персона: {}\n", config.persona);
 
     // Провайдер LLM.
     line(Level::Ok, "Провайдер", config.llm_provider.as_str());

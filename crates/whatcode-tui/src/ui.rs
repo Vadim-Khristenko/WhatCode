@@ -53,34 +53,56 @@ fn render_header(frame: &mut Frame, area: Rect, state: &AppState, theme: &Theme)
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let title = Line::from(vec![
-        Span::styled("❄ WHATCODE ", theme.title()),
-        Span::styled("· Ассистент для разработки", theme.dim()),
-    ]);
-    let meta = Line::from(vec![
-        Span::styled("провайдер ", theme.dim()),
-        Span::styled(&state.provider_label, Style::default().fg(theme.accent)),
-        Span::styled("  модель ", theme.dim()),
-        Span::styled(&state.model_label, Style::default().fg(theme.persona)),
-        Span::styled("  режим ", theme.dim()),
-        Span::styled(&state.mode_label, Style::default().fg(theme.warning)),
-    ]);
+    // Адаптивный заголовок: на маленькой ширине оставляем только имя и персону.
+    let persona = &state.persona_name;
+    let title = if inner.width < 40 {
+        Line::from(vec![
+            Span::styled("❄ WHATCODE", theme.title()),
+            Span::styled(" · ", theme.dim()),
+            Span::styled(persona, theme.header()),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled("❄ WHATCODE ", theme.title()),
+            Span::styled("· Ассистент для разработки · ", theme.dim()),
+            Span::styled(persona, theme.header()),
+        ])
+    };
+    let meta = if inner.width < 60 {
+        Line::from(vec![
+            Span::styled("персона ", theme.dim()),
+            Span::styled(persona, Style::default().fg(theme.persona)),
+            Span::styled("  режим ", theme.dim()),
+            Span::styled(&state.mode_label, Style::default().fg(theme.warning)),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled("провайдер ", theme.dim()),
+            Span::styled(&state.provider_label, Style::default().fg(theme.accent)),
+            Span::styled("  модель ", theme.dim()),
+            Span::styled(&state.model_label, Style::default().fg(theme.persona)),
+            Span::styled("  режим ", theme.dim()),
+            Span::styled(&state.mode_label, Style::default().fg(theme.warning)),
+        ])
+    };
     let para = Paragraph::new(Text::from(vec![title, meta]));
     frame.render_widget(para, inner);
 }
 
 fn render_body(frame: &mut Frame, area: Rect, state: &AppState, theme: &Theme) {
-    // Горизонтально: лента диалога (растягивается) + панель агентов (фикс).
-    let show_agents = !state.agents.is_empty();
+    // Адаптивная горизонтальная раскладка.
+    // Панель агентов скрывается, если терминал слишком узкий (< 90 колонок)
+    // или если агентов нет.
+    let show_agents = !state.agents.is_empty() && area.width >= 90;
     let cols = if show_agents {
         Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Min(20), Constraint::Length(34)])
+            .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
             .split(area)
     } else {
         Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Min(20)])
+            .constraints([Constraint::Percentage(100)])
             .split(area)
     };
 
@@ -103,8 +125,8 @@ fn render_transcript(frame: &mut Frame, area: Rect, state: &AppState, theme: &Th
     for entry in &state.lines {
         let (label, label_style, body_style) = match entry.kind {
             LineKind::User => ("Вы", theme.user_label(), Style::default().fg(theme.text)),
-            LineKind::Herta => (
-                "Герта",
+            LineKind::Persona => (
+                state.persona_name.as_str(),
                 theme.persona_label(),
                 Style::default().fg(theme.text),
             ),
@@ -116,7 +138,7 @@ fn render_transcript(frame: &mut Frame, area: Rect, state: &AppState, theme: &Th
             ),
         };
         // Заголовок реплики.
-        if matches!(entry.kind, LineKind::User | LineKind::Herta) {
+        if matches!(entry.kind, LineKind::User | LineKind::Persona) {
             lines.push(Line::from(Span::styled(format!("{label}:"), label_style)));
         }
         for sub in entry.text.split('\n') {
@@ -181,10 +203,11 @@ fn render_agents(frame: &mut Frame, area: Rect, state: &AppState, theme: &Theme)
 
 fn render_input(frame: &mut Frame, area: Rect, state: &AppState, theme: &Theme) {
     let focused = state.focus == Focus::Input;
+    let persona = &state.persona_name;
     let hint = if state.busy {
-        " Герта размышляет… "
+        format!(" {persona} размышляет… ")
     } else {
-        " Ввод (Enter — отправить) "
+        " Ввод (Enter — отправить) ".to_string()
     };
     let block = Block::default()
         .borders(Borders::ALL)
@@ -245,7 +268,7 @@ fn render_status(frame: &mut Frame, area: Rect, state: &AppState, theme: &Theme)
 pub fn render_help(frame: &mut Frame, theme: &Theme) {
     let area = frame.area();
     let w = 60u16.min(area.width.saturating_sub(4));
-    let h = 14u16.min(area.height.saturating_sub(2));
+    let h = 18u16.min(area.height.saturating_sub(2));
     let x = area.x + (area.width.saturating_sub(w)) / 2;
     let y = area.y + (area.height.saturating_sub(h)) / 2;
     let popup = Rect {
@@ -322,6 +345,10 @@ pub fn render_help(frame: &mut Frame, theme: &Theme) {
             theme.dim(),
         )),
         Line::from(Span::styled("/say <текст>    озвучить (TTS)", theme.dim())),
+        Line::from(Span::styled(
+            "/persona <id>   herta | anis | default",
+            theme.dim(),
+        )),
         Line::from(Span::styled(
             "/model          модель и контекст",
             theme.dim(),

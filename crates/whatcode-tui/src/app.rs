@@ -18,6 +18,7 @@ use crossterm::terminal::{
 use futures::StreamExt;
 use whatcode_agent::{run_tool_loop, AgentEvent, AgentStatus, AgentTask, Supervisor};
 use whatcode_core::persona;
+use whatcode_core::persona::Persona;
 use whatcode_core::{
     estimate_total_tokens, CompactionDecision, CompactionPlan, ContextManager, WhatCodeError, Message,
     Result,
@@ -67,6 +68,8 @@ pub struct App {
     backend_rx: mpsc::UnboundedReceiver<Backend>,
     agent_tx: mpsc::UnboundedSender<AgentEvent>,
     agent_rx: mpsc::UnboundedReceiver<AgentEvent>,
+    /// Активная персона (динамически выбирается через /persona).
+    persona: Box<dyn Persona>,
 }
 
 impl App {
@@ -83,28 +86,37 @@ impl App {
         recap_enabled: bool,
         recap_every_turns: u32,
         long_memory_block: Option<String>,
+        persona_id: impl Into<String>,
     ) -> Self {
+        let persona_id = persona_id.into().to_lowercase();
+        let persona = persona::common::get(&persona_id);
+
         let provider = client.provider_name().to_string();
         let model = client.model_name().to_string();
         let conversation =
-            persona::build_bootstrap_messages(Some(&model), long_memory_block.as_deref());
+            persona.bootstrap_messages(Some(&model), long_memory_block.as_deref());
 
         let (backend_tx, backend_rx) = mpsc::unbounded_channel();
         let (agent_tx, agent_rx) = mpsc::unbounded_channel();
 
-        let mut state = AppState::new(provider, model, context_limit);
+        let mut state = AppState::new(
+            provider,
+            model,
+            context_limit,
+            persona.display_name(),
+        );
         state.context_used = estimate_total_tokens(&conversation);
         state.mode_label = registry.mode().as_str().to_string();
         let tool_count = registry.len();
         if tool_count > 0 {
             state.push_line(ChatLine::notice(format!(
-                "Доступно инструментов: {tool_count}. Команды: /goal /ask /tools /compact /model /help."
+                "Доступно инструментов: {tool_count}. Команды: /goal /ask /tools /compact /model /persona /help."
             )));
         }
 
         Self {
             state,
-            theme: Theme::default(),
+            theme: Theme::from_persona_color(persona.color()),
             client,
             registry,
             supervisor,
@@ -122,6 +134,7 @@ impl App {
             backend_rx,
             agent_tx,
             agent_rx,
+            persona,
         }
     }
 
@@ -226,14 +239,15 @@ impl App {
         }
 
         // Быстрый ответ об идентичности без обращения к модели.
-        if persona::is_identity_query(&text) {
-            let reply = persona::build_identity_reply(&text);
-            self.state.push_line(ChatLine::user(text.clone()));
-            self.state.push_line(ChatLine::herta(reply.clone()));
-            self.conversation.push(Message::user(text));
-            self.conversation.push(Message::assistant(reply));
-            self.recompute_context();
-            return;
+        if self.persona.is_identity_query(&text) {
+            if let Some(reply) = self.persona.build_identity_reply(&text) {
+                self.state.push_line(ChatLine::user(text.clone()));
+                self.state.push_line(ChatLine::persona(reply.clone()));
+                self.conversation.push(Message::user(text));
+                self.conversation.push(Message::assistant(reply));
+                self.recompute_context();
+                return;
+            }
         }
 
         self.state.push_line(ChatLine::user(text.clone()));
@@ -251,7 +265,7 @@ impl App {
             .find(|m| matches!(m.role, whatcode_core::Role::User))
             .map(|m| m.content.clone())
             .unwrap_or_default();
-        if let Some(hint) = persona::build_conversational_hint(&last_user) {
+        if let Some(hint) = self.persona.build_conversational_hint(&last_user) {
             request.push(Message::system(hint));
         }
         if let Some(goal) = &self.goal {
@@ -384,6 +398,35 @@ impl App {
                     ));
                 }
             }
+            "persona" => {
+                if tail.is_empty() {
+                    let list = persona::common::list()
+                        .into_iter()
+                        .map(|(id, name)| format!("{id} — {name}"))
+                        .collect::<Vec<_>>()
+                        .join(" | ");
+                    self.state.push_line(ChatLine::notice(format!(
+                        "Текущая персона: {} ({}). Доступные: {list}",
+                        self.persona.display_name(),
+                        self.persona.id()
+                    )));
+                } else {
+                    let new = persona::common::get(tail);
+                    let name = new.display_name().to_string();
+                    self.persona = new;
+                    self.theme = Theme::from_persona_color(self.persona.color());
+                    self.state.persona_name = name.clone();
+                    self.state.push_line(ChatLine::notice(format!(
+                        "Персона переключена: {name}. Новый цвет и тон применены."
+                    )));
+                    // Пересоздаём системный промпт с новой персоной.
+                    // История пользовательских сообщений сохраняется отдельно в текущем сеансе.
+                    self.conversation = self
+                        .persona
+                        .bootstrap_messages(Some(&self.state.model_label), None);
+                    self.state.context_used = estimate_total_tokens(&self.conversation);
+                }
+            }
             "allow" => {
                 if tail.is_empty() {
                     self.state.push_line(ChatLine::notice(
@@ -475,13 +518,13 @@ impl App {
                 } else {
                     reply
                 };
-                if persona::needs_persona_repair(&reply) {
-                    self.state.status = "персона under repair".into();
+                if self.persona.needs_persona_repair(&reply) {
+                    self.state.status = "персона под починкой".into();
                 }
                 if self.voice.is_enabled() {
                     self.voice.speak(&reply);
                 }
-                self.state.push_line(ChatLine::herta(reply.clone()));
+                self.state.push_line(ChatLine::persona(reply.clone()));
                 self.conversation.push(Message::assistant(reply));
                 self.state.busy = false;
                 self.state.status = "готова".into();
@@ -546,7 +589,7 @@ impl App {
                 self.state
                     .upsert_agent(&id, None, AgentStatus::Done, Some(preview(&output)));
                 self.state
-                    .push_line(ChatLine::herta(format!("[марионетка] {output}")));
+                    .push_line(ChatLine::persona(format!("[марионетка] {output}")));
             }
             AgentEvent::Failed { id, error } => {
                 self.state

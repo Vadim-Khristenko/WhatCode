@@ -517,6 +517,8 @@ pub struct AppConfig {
     /// Авто-recap: периодически вставлять краткую сводку (как в Claude Code).
     pub recap_enabled: bool,
     pub recap_every_turns: u32,
+    /// Идентификатор активной персоны (herta, anis, default).
+    pub persona: String,
 }
 
 impl Default for AppConfig {
@@ -563,6 +565,7 @@ impl Default for AppConfig {
             mode: crate::mode::AgentMode::Auto,
             recap_enabled: false,
             recap_every_turns: 8,
+            persona: "herta".into(),
         }
     }
 }
@@ -751,6 +754,7 @@ impl AppConfig {
         cfg.mode = env_opt("WHATCODE_MODE")
             .and_then(|m| crate::mode::AgentMode::parse(&m))
             .unwrap_or(crate::mode::AgentMode::Auto);
+        cfg.persona = env_str("WHATCODE_PERSONA", "herta").to_lowercase();
 
         cfg.recap_enabled = env_bool("RECAP_ENABLED", false);
         cfg.recap_every_turns = env_parse("RECAP_EVERY_TURNS", 8);
