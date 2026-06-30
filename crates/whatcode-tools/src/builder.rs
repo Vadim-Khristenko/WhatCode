@@ -5,12 +5,12 @@
 //! время, fetch_url, навыки, cargo, uv, toolchain) доступен всегда; память,
 //! веб-поиск, анализ кода и системные действия — по флагам конфигурации.
 
+use crate::build_tools::{ProjectInfoTool, VerifyBuildTool};
 use crate::code_tools::{LintTool, TypeCheckTool};
 use crate::fs_tools::{AppendFileTool, ListDirTool, ReadFileTool, WriteFileTool};
-use crate::git::{
-    GitAddTool, GitBranchTool, GitCommitTool, GitDiffTool, GitGrepTool, GitLogTool, GitShowTool,
-    GitStatusTool,
-};
+use crate::git::advanced::*;
+use crate::git::read::*;
+use crate::git::write::*;
 use crate::http_tool::FetchUrlTool;
 use crate::memory_tools::{ForgetTool, RecallTool, RememberTool};
 use crate::proc_tool::ProcessTool;
@@ -25,9 +25,9 @@ use whatcode_core::{AgentMode, LongMemoryStore, ToolRisk};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-/// Каталог навыков из окружения `whatcode_SKILLS_DIR` (по умолчанию `skills`).
+/// Каталог навыков из окружения `WHATCODE_SKILLS_DIR` (по умолчанию `skills`).
 fn skills_dir() -> String {
-    std::env::var("whatcode_SKILLS_DIR")
+    std::env::var("WHATCODE_SKILLS_DIR")
         .ok()
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| "skills".to_string())
@@ -64,6 +64,22 @@ fn register_uv(reg: &mut ToolRegistry) {
     }
 }
 
+/// Зарегистрировать инструменты TypeScript/JavaScript через Bun.
+fn register_bun(reg: &mut ToolRegistry) {
+    let w = ToolRisk::Write;
+    let tools: Vec<ProcessTool> = vec![
+        ProcessTool::new("bun_run", "Запустить скрипт через Bun (`bun run`). Имя скрипта/команды — в args.", "bun", vec!["run"], w, 600),
+        ProcessTool::new("bun_test", "Запустить тесты через Bun (`bun test`). Фильтр — в args.", "bun", vec!["test"], w, 600),
+        ProcessTool::new("bun_build", "Собрать проект через Bun (`bun build`). Аргументы — в args.", "bun", vec!["build"], w, 600),
+        ProcessTool::new("bun_add", "Добавить npm-зависимость через Bun (`bun add <pkg>`). Имя пакета — в args.", "bun", vec!["add"], w, 300),
+        ProcessTool::new("bun_install", "Установить зависимости через Bun (`bun install`).", "bun", vec!["install"], w, 600),
+        ProcessTool::new("bun_lint", "Проверить код через Bun-линтер (`bun lint` или `bun x eslint`). Команда — в args.", "bun", vec!["lint"], w, 300),
+    ];
+    for t in tools {
+        reg.register(Arc::new(t));
+    }
+}
+
 /// Построить полный реестр инструментов для агента в заданном режиме.
 pub fn build_registry(
     config: &AppConfig,
@@ -72,13 +88,16 @@ pub fn build_registry(
 ) -> ToolRegistry {
     let mut reg = ToolRegistry::with_mode(mode);
 
-    // --- разведка и чтение ---
+    // --- разведка и чтение (Git + файлы + сеть) ---
     reg.register(Arc::new(GitStatusTool::default()))
         .register(Arc::new(GitLogTool::default()))
         .register(Arc::new(GitDiffTool::default()))
+        .register(Arc::new(GitDiffStagedTool::default()))
         .register(Arc::new(GitBranchTool::default()))
+        .register(Arc::new(GitBranchRemoteTool::default()))
         .register(Arc::new(GitShowTool::default()))
         .register(Arc::new(GitGrepTool::default()))
+        .register(Arc::new(GitRemoteTool::default()))
         .register(Arc::new(ReadFileTool))
         .register(Arc::new(ListDirTool))
         .register(Arc::new(FetchUrlTool::default()))
@@ -89,11 +108,33 @@ pub fn build_registry(
     reg.register(Arc::new(WriteFileTool))
         .register(Arc::new(AppendFileTool))
         .register(Arc::new(GitAddTool::default()))
-        .register(Arc::new(GitCommitTool::default()));
+        .register(Arc::new(GitResetHeadTool::default()))
+        .register(Arc::new(GitCommitTool::default()))
+        .register(Arc::new(GitPushTool::default()))
+        .register(Arc::new(GitPullTool::default()))
+        .register(Arc::new(GitCheckoutTool::default()))
+        .register(Arc::new(GitStashTool::default()))
+        .register(Arc::new(GitResetTool::default()))
+        .register(Arc::new(GitRevertTool::default()))
+        .register(Arc::new(GitRebaseTool::default()))
+        .register(Arc::new(GitCherryPickTool::default()))
+        .register(Arc::new(GitCleanTool::default()))
+        .register(Arc::new(GitMergeTool::default()));
+
+    // --- полуавтоматические git-workflows ---
+    reg.register(Arc::new(GitRollbackCommitTool::default()))
+        .register(Arc::new(GitSyncBranchTool::default()))
+        .register(Arc::new(GitUnstageAllTool::default()))
+        .register(Arc::new(GitDiscardChangesTool::default()))
+        .register(Arc::new(GitCommitAllTool::default()))
+        .register(Arc::new(GitSavepointTool::default()));
 
     // --- автономная разработка ---
     register_cargo(&mut reg);
     register_uv(&mut reg);
+    register_bun(&mut reg);
+    reg.register(Arc::new(VerifyBuildTool))
+        .register(Arc::new(ProjectInfoTool));
 
     // --- установка инструментария (опасное) ---
     reg.register(Arc::new(InstallToolchainTool));

@@ -82,6 +82,20 @@ pub fn build_client(config: &AppConfig) -> Result<Box<dyn ChatClient>> {
                 "deepseek", c,
             )?))
         }
+        LlmProvider::Fireworks => {
+            let c = config.fireworks.clone();
+            ensure_key(&c.api_key, "fireworks")?;
+            Ok(Box::new(openai_compat::OpenAiCompatClient::new(
+                "fireworks", c,
+            )?))
+        }
+        LlmProvider::OpenCodeGo => {
+            let c = config.opencode_go.clone();
+            ensure_key(&c.api_key, "opencode-go")?;
+            Ok(Box::new(openai_compat::OpenAiCompatClient::new(
+                "opencode-go", c,
+            )?))
+        }
         LlmProvider::GoogleAi => {
             let c = config.google_ai.clone();
             if c.api_key.is_none() {

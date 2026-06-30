@@ -58,6 +58,8 @@ pub enum LlmProvider {
     DeepSeek,
     GoogleAi,
     Anthropic,
+    Fireworks,
+    OpenCodeGo,
 }
 
 impl LlmProvider {
@@ -67,6 +69,10 @@ impl LlmProvider {
             "deepseek" => Self::DeepSeek,
             "google_ai" | "google" | "gemini" => Self::GoogleAi,
             "anthropic" | "claude" => Self::Anthropic,
+            "fireworks" => Self::Fireworks,
+            "opencode-go" | "opencode_go" | "go" | "zen-go" | "zen_go" => {
+                Self::OpenCodeGo
+            }
             _ => Self::Ollama,
         }
     }
@@ -78,6 +84,8 @@ impl LlmProvider {
             Self::DeepSeek => "deepseek",
             Self::GoogleAi => "google_ai",
             Self::Anthropic => "anthropic",
+            Self::Fireworks => "fireworks",
+            Self::OpenCodeGo => "opencode-go",
         }
     }
 }
@@ -500,6 +508,8 @@ pub struct AppConfig {
     pub ollama: OllamaConfig,
     pub cerebras: OpenAiCompatConfig,
     pub deepseek: OpenAiCompatConfig,
+    pub fireworks: OpenAiCompatConfig,
+    pub opencode_go: OpenAiCompatConfig,
     pub google_ai: GoogleAiConfig,
     pub anthropic: AnthropicConfig,
     pub memory: MemoryConfig,
@@ -544,6 +554,26 @@ impl Default for AppConfig {
                 api_key: None,
                 base_url: "https://api.deepseek.com".into(),
                 model: "deepseek-v4-flash".into(),
+                timeout_seconds: 120.0,
+                temperature: 0.55,
+                max_tokens: 700,
+                retry_attempts: 4,
+                rate_limit_retries: 2,
+            },
+            fireworks: OpenAiCompatConfig {
+                api_key: None,
+                base_url: "https://api.fireworks.ai/inference/v1".into(),
+                model: "accounts/fireworks/models/kimi-k2p5-whatcode".into(),
+                timeout_seconds: 120.0,
+                temperature: 0.55,
+                max_tokens: 700,
+                retry_attempts: 4,
+                rate_limit_retries: 2,
+            },
+            opencode_go: OpenAiCompatConfig {
+                api_key: None,
+                base_url: "https://opencode.ai/zen/go/v1".into(),
+                model: "kimi-k2.7-code".into(),
                 timeout_seconds: 120.0,
                 temperature: 0.55,
                 max_tokens: 700,
@@ -614,6 +644,37 @@ impl AppConfig {
             max_tokens: env_parse("DEEPSEEK_MAX_TOKENS", 700),
             retry_attempts: env_parse("DEEPSEEK_RETRY_ATTEMPTS", 4),
             rate_limit_retries: env_parse("DEEPSEEK_RATE_LIMIT_RETRIES", 2),
+        };
+
+        cfg.fireworks = OpenAiCompatConfig {
+            api_key: env_opt("FIREWORKS_API_KEY"),
+            base_url: env_str(
+                "FIREWORKS_BASE_URL",
+                "https://api.fireworks.ai/inference/v1",
+            ),
+            model: env_str(
+                "FIREWORKS_MODEL",
+                "accounts/fireworks/models/kimi-k2p5-whatcode",
+            ),
+            timeout_seconds: env_parse("FIREWORKS_TIMEOUT_SECONDS", 120.0),
+            temperature: env_parse("FIREWORKS_TEMPERATURE", 0.55),
+            max_tokens: env_parse("FIREWORKS_MAX_TOKENS", 700),
+            retry_attempts: env_parse("FIREWORKS_RETRY_ATTEMPTS", 4),
+            rate_limit_retries: env_parse("FIREWORKS_RATE_LIMIT_RETRIES", 2),
+        };
+
+        cfg.opencode_go = OpenAiCompatConfig {
+            api_key: env_opt("OPENCODE_GO_API_KEY").or_else(|| env_opt("ZEN_GO_API_KEY")),
+            base_url: env_str(
+                "OPENCODE_GO_BASE_URL",
+                "https://opencode.ai/zen/go/v1",
+            ),
+            model: env_str("OPENCODE_GO_MODEL", "kimi-k2.7-code"),
+            timeout_seconds: env_parse("OPENCODE_GO_TIMEOUT_SECONDS", 120.0),
+            temperature: env_parse("OPENCODE_GO_TEMPERATURE", 0.55),
+            max_tokens: env_parse("OPENCODE_GO_MAX_TOKENS", 700),
+            retry_attempts: env_parse("OPENCODE_GO_RETRY_ATTEMPTS", 4),
+            rate_limit_retries: env_parse("OPENCODE_GO_RATE_LIMIT_RETRIES", 2),
         };
 
         cfg.google_ai = GoogleAiConfig {
@@ -768,6 +829,8 @@ impl AppConfig {
             LlmProvider::Ollama => &self.ollama.model,
             LlmProvider::Cerebras => &self.cerebras.model,
             LlmProvider::DeepSeek => &self.deepseek.model,
+            LlmProvider::Fireworks => &self.fireworks.model,
+            LlmProvider::OpenCodeGo => &self.opencode_go.model,
             LlmProvider::GoogleAi => &self.google_ai.model,
             LlmProvider::Anthropic => &self.anthropic.model,
         }
@@ -782,6 +845,9 @@ mod tests {
     fn provider_parsing() {
         assert_eq!(LlmProvider::parse("cerebras"), LlmProvider::Cerebras);
         assert_eq!(LlmProvider::parse("GOOGLE"), LlmProvider::GoogleAi);
+        assert_eq!(LlmProvider::parse("fireworks"), LlmProvider::Fireworks);
+        assert_eq!(LlmProvider::parse("opencode_go"), LlmProvider::OpenCodeGo);
+        assert_eq!(LlmProvider::parse("zen-go"), LlmProvider::OpenCodeGo);
         assert_eq!(LlmProvider::parse("неизвестно"), LlmProvider::Ollama);
     }
 

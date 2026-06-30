@@ -7,10 +7,16 @@
 #![forbid(unsafe_code)]
 
 pub mod builder;
+pub mod build_tools;
 pub mod code_tools;
 pub mod fs_tools;
 pub mod git;
 pub mod http_tool;
+
+// Re-export git tools for backward compatibility.
+pub use git::advanced::*;
+pub use git::read::*;
+pub use git::write::*;
 pub mod memory_tools;
 pub mod proc_tool;
 pub mod registry;

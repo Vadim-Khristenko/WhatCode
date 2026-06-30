@@ -1,49 +1,14 @@
-//! Интеграция с Git (только чтение). Инструменты дают модели обзор репозитория
-//! без мутаций: статус, история, дифф, текущая ветка, список веток.
-//!
-//! Все команды выполняются в каталоге `repo_root` с таймаутом. Деструктивные
-//! операции (commit/push/reset) сознательно не предоставляются — это политика
-//! безопасности уровня инструмента.
+//! Git-инструменты только для чтения.
 
+use crate::git::GitContext;
 use crate::registry::Tool;
-use crate::util::run_capture;
 use async_trait::async_trait;
 use whatcode_core::{ParamType, ToolCall, ToolParameter, ToolResult, ToolSpec};
-use std::path::PathBuf;
-
-const TIMEOUT_SECS: u64 = 15;
-
-#[derive(Clone)]
-struct GitContext {
-    repo_root: PathBuf,
-}
-
-impl GitContext {
-    fn new() -> Self {
-        Self {
-            repo_root: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-        }
-    }
-
-    async fn git(&self, tool: &'static str, args: &[&str]) -> ToolResult {
-        match run_capture("git", args, Some(&self.repo_root), TIMEOUT_SECS).await {
-            Ok(out) if out.combined.is_empty() => ToolResult::ok(tool, "(пусто)"),
-            Ok(out) => ToolResult::ok(tool, out.combined),
-            Err(e) => ToolResult::rejected(tool, e),
-        }
-    }
-}
 
 /// `git_status` — рабочее дерево в кратком формате.
+#[derive(Default, Clone)]
 pub struct GitStatusTool {
     ctx: GitContext,
-}
-impl Default for GitStatusTool {
-    fn default() -> Self {
-        Self {
-            ctx: GitContext::new(),
-        }
-    }
 }
 
 #[async_trait]
@@ -65,15 +30,9 @@ impl Tool for GitStatusTool {
 }
 
 /// `git_log` — последние коммиты.
+#[derive(Default, Clone)]
 pub struct GitLogTool {
     ctx: GitContext,
-}
-impl Default for GitLogTool {
-    fn default() -> Self {
-        Self {
-            ctx: GitContext::new(),
-        }
-    }
 }
 
 #[async_trait]
@@ -101,15 +60,9 @@ impl Tool for GitLogTool {
 }
 
 /// `git_diff` — несохранённые изменения (опционально по одному пути).
+#[derive(Default, Clone)]
 pub struct GitDiffTool {
     ctx: GitContext,
-}
-impl Default for GitDiffTool {
-    fn default() -> Self {
-        Self {
-            ctx: GitContext::new(),
-        }
-    }
 }
 
 #[async_trait]
@@ -131,9 +84,8 @@ impl Tool for GitDiffTool {
     async fn call(&self, call: &ToolCall) -> ToolResult {
         match call.arg_str("path") {
             Some(path) => {
-                // Запрещаем выход за пределы репозитория простым правилом.
-                if path.contains("..") {
-                    return ToolResult::rejected("git_diff", "путь не должен содержать `..`");
+                if !GitContext::safe_arg(&path) {
+                    return ToolResult::rejected("git_diff", "путь не должен содержать `..` или начинаться с `-`");
                 }
                 self.ctx.git("git_diff", &["diff", "--", &path]).await
             }
@@ -142,16 +94,31 @@ impl Tool for GitDiffTool {
     }
 }
 
-/// `git_branches` — текущая ветка и список локальных веток.
-pub struct GitBranchTool {
+/// `git_diff_staged` — изменения в индексе.
+#[derive(Default, Clone)]
+pub struct GitDiffStagedTool {
     ctx: GitContext,
 }
-impl Default for GitBranchTool {
-    fn default() -> Self {
-        Self {
-            ctx: GitContext::new(),
-        }
+
+#[async_trait]
+impl Tool for GitDiffStagedTool {
+    fn spec(&self) -> ToolSpec {
+        ToolSpec::new(
+            "git_diff_staged",
+            "Показать изменения, уже добавленные в индекс Git (`git diff --staged`). Только чтение. \
+             Используй перед коммитом, чтобы убедиться, что в staged попало именно то, что нужно.",
+            vec![],
+        )
     }
+    async fn call(&self, _call: &ToolCall) -> ToolResult {
+        self.ctx.git("git_diff_staged", &["diff", "--staged"]).await
+    }
+}
+
+/// `git_branches` — текущая ветка и список локальных веток.
+#[derive(Default, Clone)]
+pub struct GitBranchTool {
+    ctx: GitContext,
 }
 
 #[async_trait]
@@ -169,16 +136,31 @@ impl Tool for GitBranchTool {
     }
 }
 
-/// `git_show` — показать конкретный коммит (по умолчанию HEAD).
-pub struct GitShowTool {
+/// `git_branch_remote` — локальные и удалённые ветки с их состоянием.
+#[derive(Default, Clone)]
+pub struct GitBranchRemoteTool {
     ctx: GitContext,
 }
-impl Default for GitShowTool {
-    fn default() -> Self {
-        Self {
-            ctx: GitContext::new(),
-        }
+
+#[async_trait]
+impl Tool for GitBranchRemoteTool {
+    fn spec(&self) -> ToolSpec {
+        ToolSpec::new(
+            "git_branch_remote",
+            "Показать локальные и удалённые ветки Git (`git branch -a -vv`). Только чтение. \
+             Показывает, какая ветка от какой удалённой отслеживается и насколько она впереди/позади.",
+            vec![],
+        )
     }
+    async fn call(&self, _call: &ToolCall) -> ToolResult {
+        self.ctx.git("git_branch_remote", &["branch", "-a", "-vv"]).await
+    }
+}
+
+/// `git_show` — показать конкретный коммит (по умолчанию HEAD).
+#[derive(Default, Clone)]
+pub struct GitShowTool {
+    ctx: GitContext,
 }
 
 #[async_trait]
@@ -193,7 +175,7 @@ impl Tool for GitShowTool {
     }
     async fn call(&self, call: &ToolCall) -> ToolResult {
         let r = call.arg_str("ref").unwrap_or_else(|| "HEAD".to_string());
-        if r.contains("..") || r.starts_with('-') {
+        if !GitContext::safe_arg(&r) {
             return ToolResult::rejected("git_show", "недопустимая ссылка");
         }
         self.ctx.git("git_show", &["show", "--stat", &r]).await
@@ -201,15 +183,9 @@ impl Tool for GitShowTool {
 }
 
 /// `git_grep` — поиск по содержимому отслеживаемых файлов.
+#[derive(Default, Clone)]
 pub struct GitGrepTool {
     ctx: GitContext,
-}
-impl Default for GitGrepTool {
-    fn default() -> Self {
-        Self {
-            ctx: GitContext::new(),
-        }
-    }
 }
 
 #[async_trait]
@@ -231,75 +207,32 @@ impl Tool for GitGrepTool {
         let Some(pattern) = call.arg_str("pattern") else {
             return ToolResult::rejected("git_grep", "не передан `pattern`");
         };
+        if !GitContext::safe_arg(&pattern) {
+            return ToolResult::rejected("git_grep", "недопустимый pattern");
+        }
         self.ctx
             .git("git_grep", &["grep", "-n", "-e", &pattern])
             .await
     }
 }
 
-/// `git_add` — добавить пути в индекс (staging).
-pub struct GitAddTool {
+/// `git_remote` — информация об удалённых репозиториях.
+#[derive(Default, Clone)]
+pub struct GitRemoteTool {
     ctx: GitContext,
-}
-impl Default for GitAddTool {
-    fn default() -> Self {
-        Self {
-            ctx: GitContext::new(),
-        }
-    }
 }
 
 #[async_trait]
-impl Tool for GitAddTool {
+impl Tool for GitRemoteTool {
     fn spec(&self) -> ToolSpec {
         ToolSpec::new(
-            "git_add",
-            "Добавить изменения в индекс Git (`git add`). Изменяет состояние репозитория. Параметр \
-             `path` — путь/паттерн относительно корня (по умолчанию все изменения `-A`).",
-            vec![ToolParameter::new("path", ParamType::String, "Путь для staging (по умолчанию все)", false)],
+            "git_remote",
+            "Показать настроенные удалённые репозитории Git (`git remote -v`). Только чтение. \
+             Используй, чтобы узнать, куда можно push/pull.",
+            vec![],
         )
-        .write()
     }
-    async fn call(&self, call: &ToolCall) -> ToolResult {
-        match call.arg_str("path") {
-            Some(path) if !path.contains("..") => {
-                self.ctx.git("git_add", &["add", "--", &path]).await
-            }
-            Some(_) => ToolResult::rejected("git_add", "путь не должен содержать `..`"),
-            None => self.ctx.git("git_add", &["add", "-A"]).await,
-        }
-    }
-}
-
-/// `git_commit` — создать коммит из проиндексированных изменений.
-pub struct GitCommitTool {
-    ctx: GitContext,
-}
-impl Default for GitCommitTool {
-    fn default() -> Self {
-        Self {
-            ctx: GitContext::new(),
-        }
-    }
-}
-
-#[async_trait]
-impl Tool for GitCommitTool {
-    fn spec(&self) -> ToolSpec {
-        ToolSpec::new(
-            "git_commit",
-            "Создать коммит Git из проиндексированных изменений (`git commit -m`). Изменяет историю \
-             репозитория. Параметр `message` обязателен. Не делает push.",
-            vec![ToolParameter::new("message", ParamType::String, "Сообщение коммита", true)],
-        )
-        .write()
-    }
-    async fn call(&self, call: &ToolCall) -> ToolResult {
-        let Some(message) = call.arg_str("message") else {
-            return ToolResult::rejected("git_commit", "не передан `message`");
-        };
-        self.ctx
-            .git("git_commit", &["commit", "-m", &message])
-            .await
+    async fn call(&self, _call: &ToolCall) -> ToolResult {
+        self.ctx.git("git_remote", &["remote", "-v"]).await
     }
 }
