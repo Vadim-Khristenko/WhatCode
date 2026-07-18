@@ -29,14 +29,25 @@ impl SkillLibrary {
     }
 
     pub fn catalog(&self) -> String {
+        self.catalog_matching("")
+    }
+
+    /// Каталог, отфильтрованный по запросу (имя/назначение/теги). Пустой запрос —
+    /// весь каталог.
+    pub fn catalog_matching(&self, query: &str) -> String {
         if self.skills.is_empty() {
             return "Навыки не найдены.".to_string();
         }
-        self.skills
+        let matched: Vec<String> = self
+            .skills
             .iter()
+            .filter(|s| s.matches(query))
             .map(Skill::summary)
-            .collect::<Vec<_>>()
-            .join("\n")
+            .collect();
+        if matched.is_empty() {
+            return format!("Навыки по запросу «{}» не найдены.", query.trim());
+        }
+        matched.join("\n")
     }
 
     fn find(&self, name: &str) -> Option<&Skill> {
@@ -61,14 +72,21 @@ impl Tool for ListSkillsTool {
     fn spec(&self) -> ToolSpec {
         ToolSpec::new(
             "list_skills",
-            "Перечислить доступные навыки ассистента с их назначением и условием применения. Без параметров. \\
-             Вызови первым делом, если задача похожа на специализированную (например, сжатие контекста), \\
-             чтобы узнать, какой навык загрузить через use_skill.",
-            vec![],
+            "Перечислить доступные навыки ассистента с их назначением, условием применения и тегами. \
+             Необязательный параметр `query` фильтрует по имени/назначению/тегам (например, security). \
+             Вызови первым делом, если задача похожа на специализированную, чтобы узнать, \
+             какой навык загрузить через use_skill.",
+            vec![ToolParameter::new(
+                "query",
+                ParamType::String,
+                "Ключевое слово или тег для фильтра (необязательно)",
+                false,
+            )],
         )
     }
-    async fn call(&self, _call: &ToolCall) -> ToolResult {
-        ToolResult::ok("list_skills", self.lib.catalog())
+    async fn call(&self, call: &ToolCall) -> ToolResult {
+        let query = call.arg_str("query").unwrap_or_default();
+        ToolResult::ok("list_skills", self.lib.catalog_matching(&query))
     }
 }
 
@@ -107,5 +125,26 @@ impl Tool for UseSkillTool {
                 format!("навык `{name}` не найден; вызови list_skills"),
             ),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn catalog_filters_by_tag() {
+        let lib = SkillLibrary::load("../../skills");
+        assert!(!lib.is_empty(), "репозиторные навыки должны загрузиться");
+        let full = lib.catalog();
+        assert!(full.contains("security-review"));
+        assert!(full.contains("pr-description"));
+        // Фильтр по тегу оставляет security-review и отсекает несвязанные навыки.
+        let sec = lib.catalog_matching("security");
+        assert!(sec.contains("security-review"));
+        assert!(!sec.contains("git-workflow"));
+        // Пустой результат по несуществующему запросу.
+        let none = lib.catalog_matching("нетакогонавыкавообще");
+        assert!(none.contains("не найден"));
     }
 }

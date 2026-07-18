@@ -12,10 +12,12 @@
 //! @skill имя-навыка
 //! @when когда применять (одна строка-триггер)
 //! @desc краткое назначение (одна строка)
+//! @tags тег1, тег2 (необязательно; расширенный формат `.whatcode`)
 //! ---
 //! Тело навыка: пошаговые инструкции в свободном виде.
 //! ```
 //! Строки до разделителя `---` — заголовок (директивы `@`), после — тело.
+//! Неизвестные директивы `@` игнорируются — формат вперёд-совместим.
 
 use std::path::Path;
 
@@ -25,7 +27,23 @@ pub struct Skill {
     pub name: String,
     pub when: String,
     pub desc: String,
+    /// Теги для поиска/группировки (расширенный формат). Может быть пустым.
+    pub tags: Vec<String>,
     pub body: String,
+}
+
+impl Skill {
+    /// Совпадает ли навык с поисковым запросом (по имени, назначению, тегам).
+    pub fn matches(&self, query: &str) -> bool {
+        let q = query.trim().to_lowercase();
+        if q.is_empty() {
+            return true;
+        }
+        self.name.to_lowercase().contains(&q)
+            || self.desc.to_lowercase().contains(&q)
+            || self.when.to_lowercase().contains(&q)
+            || self.tags.iter().any(|t| t.to_lowercase().contains(&q))
+    }
 }
 
 /// Ошибка разбора навыка.
@@ -56,6 +74,7 @@ impl Skill {
         let mut name = None;
         let mut when = String::new();
         let mut desc = String::new();
+        let mut tags = Vec::new();
 
         for line in header.lines() {
             let line = line.trim();
@@ -65,6 +84,12 @@ impl Skill {
                 when = rest.trim().to_string();
             } else if let Some(rest) = line.strip_prefix("@desc") {
                 desc = rest.trim().to_string();
+            } else if let Some(rest) = line.strip_prefix("@tags") {
+                tags = rest
+                    .split(',')
+                    .map(|t| t.trim().to_string())
+                    .filter(|t| !t.is_empty())
+                    .collect();
             }
         }
 
@@ -75,13 +100,24 @@ impl Skill {
             name,
             when,
             desc,
+            tags,
             body: body.trim_start_matches(['-', '\n']).trim().to_string(),
         })
     }
 
     /// Краткая карточка для каталога (без тела).
     pub fn summary(&self) -> String {
-        format!("- {} — {} [когда: {}]", self.name, self.desc, self.when)
+        if self.tags.is_empty() {
+            format!("- {} — {} [когда: {}]", self.name, self.desc, self.when)
+        } else {
+            format!(
+                "- {} — {} [когда: {}] [теги: {}]",
+                self.name,
+                self.desc,
+                self.when,
+                self.tags.join(", ")
+            )
+        }
     }
 }
 
@@ -122,6 +158,19 @@ mod tests {
         assert_eq!(skill.desc, "сжать историю");
         assert!(skill.body.starts_with("Шаг 1"));
         assert!(skill.body.contains("Шаг 2"));
+        assert!(skill.tags.is_empty());
+    }
+
+    #[test]
+    fn parses_tags_and_matches() {
+        let text = "@skill security-review\n@when правки трогают ввод/секреты\n@desc аудит безопасности\n@tags security, review, audit\n---\nПроверь инъекции.";
+        let skill = Skill::parse(text).unwrap();
+        assert_eq!(skill.tags, vec!["security", "review", "audit"]);
+        assert!(skill.matches("audit"));
+        assert!(skill.matches("БЕЗОПАСНОСТИ"));
+        assert!(skill.matches("security-review"));
+        assert!(!skill.matches("рефакторинг"));
+        assert!(skill.summary().contains("[теги: security, review, audit]"));
     }
 
     #[test]
