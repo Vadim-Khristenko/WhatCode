@@ -112,6 +112,9 @@ export ANDROID_NDK_HOME=/path/to/android-ndk   # r25+
 
 Прямо на устройстве в **Termux** NDK не нужен: `pkg install rust && cargo build -p whatcode-cli --release`.
 
+Кроме бинаря для Termux есть **APK — простая UI-обёртка** (чат поверх бинаря): проект
+в [`android/`](android/README.md), собирается в CI и прикладывается к релизу.
+
 ## Инструменты агента
 
 Уже есть:

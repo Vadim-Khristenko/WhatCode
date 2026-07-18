@@ -106,13 +106,25 @@ jobs:
           export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$ANDROID_NDK_LATEST_HOME}"
           echo "::notice::Using preinstalled NDK at $ANDROID_NDK_HOME"
           ./scripts/build-android.sh
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Build APK (UI wrapper)
+        shell: bash
+        run: |
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          cp target/aarch64-linux-android/release/whatcode \
+             android/app/src/main/jniLibs/arm64-v8a/libwhatcode.so
+          echo "sdk.dir=${ANDROID_SDK_ROOT:-$ANDROID_HOME}" > android/local.properties
+          ( cd android && gradle :app:assembleRelease --no-daemon --console=plain )
       - name: Summary
         if: always()
         run: |
           bin="target/aarch64-linux-android/release/whatcode"
+          apk="android/app/build/outputs/apk/release/app-release.apk"
           if [ -f "$bin" ]; then
-            size=$(du -h "$bin" | cut -f1)
-            echo "### Android build: ✅ ($size, aarch64-linux-android)" >> "$GITHUB_STEP_SUMMARY"
+            echo "### Android: ✅ бинарь $(du -h "$bin" | cut -f1)$([ -f "$apk" ] && echo ", APK $(du -h "$apk" | cut -f1)")" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "### Android build: ❌ failed" >> "$GITHUB_STEP_SUMMARY"
           fi

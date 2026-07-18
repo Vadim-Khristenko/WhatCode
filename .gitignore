@@ -52,3 +52,9 @@ data/
 models/
 .cache/
 docs/superpowers/
+
+# Android build artifacts (APK собирается в CI; бинарь кладётся при сборке)
+android/.gradle/
+android/local.properties
+**/build/
+android/app/src/main/jniLibs/**/libwhatcode.so

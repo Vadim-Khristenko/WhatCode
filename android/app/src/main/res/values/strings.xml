@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WhatCode</string>
+    <string name="hint_input">Спроси WhatCode…</string>
+    <string name="send">Отправить</string>
+</resources>
