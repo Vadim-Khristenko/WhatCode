@@ -15,21 +15,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Форматирование и линтинг (клиппи как гейт качества).
+  # ---------------------------------------------------------------------------
   lint:
     name: fmt + clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: |
+          channel="$(sed -n 's/^[[:space:]]*channel[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' rust-toolchain.toml)"
+          channel="${channel:-stable}"
+          echo "::notice::Rust toolchain = $channel"
+          rustup toolchain install "$channel" --profile minimal --component clippy --component rustfmt
+          rustup default "$channel"
+          rustc -V && cargo -V
       - uses: Swatinem/rust-cache@v2
       - name: rustfmt
         run: cargo fmt --all --check
       - name: clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Summary
+        if: always()
+        run: |
+          status='${{ job.status }}'
+          [ "$status" = success ] && mark='✅ passed' || mark='❌ failed'
+          echo "### Lint: $mark" >> "$GITHUB_STEP_SUMMARY"
 
+  # ---------------------------------------------------------------------------
+  # Сборка и тесты на трёх десктоп-ОС.
+  # ---------------------------------------------------------------------------
   test:
     name: test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -38,24 +55,88 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: |
+          channel="$(sed -n 's/^[[:space:]]*channel[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' rust-toolchain.toml)"
+          channel="${channel:-stable}"
+          echo "::notice::Rust toolchain = $channel on ${{ matrix.os }}"
+          rustup toolchain install "$channel" --profile minimal
+          rustup default "$channel"
+          rustc -V && cargo -V
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}
       - name: Build
         run: cargo build --workspace --locked
       - name: Test
         run: cargo test --workspace --locked
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          status='${{ job.status }}'
+          [ "$status" = success ] && mark='✅ passed' || mark='❌ failed'
+          echo "### Test on ${{ matrix.os }}: $mark" >> "$GITHUB_STEP_SUMMARY"
 
+  # ---------------------------------------------------------------------------
+  # Кросс-сборка под Android (aarch64) через NDK.
+  # ---------------------------------------------------------------------------
   android:
     name: android build (aarch64)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust toolchain + Android target
+        shell: bash
+        run: |
+          channel="$(sed -n 's/^[[:space:]]*channel[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' rust-toolchain.toml)"
+          channel="${channel:-stable}"
+          rustup toolchain install "$channel" --profile minimal
+          rustup default "$channel"
+          rustup target add aarch64-linux-android
+          rustc -V && cargo -V
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: android
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+          local-cache: true
       - name: Build whatcode for Android
         env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
         run: ./scripts/build-android.sh
+      - name: Summary
+        if: always()
+        run: |
+          bin="target/aarch64-linux-android/release/whatcode"
+          if [ -f "$bin" ]; then
+            size=$(du -h "$bin" | cut -f1)
+            echo "### Android build: ✅ ($size, aarch64-linux-android)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Android build: ❌ failed" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Итоговый статус: единая точка для branch protection.
+  # ---------------------------------------------------------------------------
+  ci-success:
+    name: CI success
+    if: always()
+    needs: [lint, test, android]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs succeeded
+        run: |
+          echo "lint=${{ needs.lint.result }} test=${{ needs.test.result }} android=${{ needs.android.result }}"
+          if [ "${{ needs.lint.result }}" != "success" ] || \
+             [ "${{ needs.test.result }}" != "success" ] || \
+             [ "${{ needs.android.result }}" != "success" ]; then
+            echo "::error::один или несколько джобов CI провалились"
+            exit 1
+          fi
+          echo "Все джобы CI прошли ✅"

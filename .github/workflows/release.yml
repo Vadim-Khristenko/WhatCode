@@ -7,19 +7,24 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to build (e.g. v0.4.0)"
+        description: "Tag to build (e.g. v0.7.0)"
         required: true
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
   BIN_NAME: whatcode
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1. Создаём черновик релиза, к которому остальные джобы прикрепляют артефакты.
+  # 1. Черновик релиза, к которому остальные джобы прикрепляют артефакты.
   # ---------------------------------------------------------------------------
   create-release:
     name: Create GitHub release
@@ -27,15 +32,18 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Resolve version
         id: version
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+            version="${{ github.event.inputs.tag }}"
           else
-            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            version="${GITHUB_REF_NAME}"
           fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "## 🚀 WhatCode $version" >> "$GITHUB_STEP_SUMMARY"
+          echo "Собираю артефакты для релиза \`$version\`." >> "$GITHUB_STEP_SUMMARY"
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
@@ -72,10 +80,19 @@ jobs:
             target: x86_64-pc-windows-msvc
             archive: zip
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+      - uses: actions/checkout@v7
+
+      - name: Install pinned Rust toolchain + target
+        shell: bash
+        run: |
+          channel="$(sed -n 's/^[[:space:]]*channel[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' rust-toolchain.toml)"
+          channel="${channel:-stable}"
+          echo "::notice::Rust $channel → target ${{ matrix.target }}"
+          rustup toolchain install "$channel" --profile minimal
+          rustup default "$channel"
+          rustup target add ${{ matrix.target }}
+          rustc -V && cargo -V
+
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
@@ -85,11 +102,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
-          mkdir -p .cargo
-          {
-            echo "[target.aarch64-unknown-linux-gnu]"
-            echo "linker = \"aarch64-linux-gnu-gcc\""
-          } >> .cargo/config.toml
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
 
       - name: Build release binary
         run: cargo build --release --locked --target ${{ matrix.target }} --bin ${{ env.BIN_NAME }}
@@ -104,6 +117,8 @@ jobs:
           cp README.md LICENSE .env.example "$staging/" 2>/dev/null || true
           tar czf "$staging.tar.gz" "$staging"
           echo "ASSET=$staging.tar.gz" >> "$GITHUB_ENV"
+          size=$(du -h "target/${{ matrix.target }}/release/${BIN_NAME}" | cut -f1)
+          echo "- ✅ \`${{ matrix.target }}\` — $size" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Package (windows)
         if: runner.os == 'Windows'
@@ -112,9 +127,11 @@ jobs:
           $staging = "$env:BIN_NAME-${{ needs.create-release.outputs.version }}-${{ matrix.target }}"
           New-Item -ItemType Directory -Force -Path $staging | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/$env:BIN_NAME.exe" $staging
-          Copy-Item README.md, .env.example $staging -ErrorAction SilentlyContinue
+          Copy-Item README.md, LICENSE, .env.example $staging -ErrorAction SilentlyContinue
           Compress-Archive -Path $staging -DestinationPath "$staging.zip"
           "ASSET=$staging.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $size = "{0:N1} MB" -f ((Get-Item "target/${{ matrix.target }}/release/$env:BIN_NAME.exe").Length / 1MB)
+          "- ✅ ``${{ matrix.target }}`` — $size" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
@@ -123,41 +140,94 @@ jobs:
           files: ${{ env.ASSET }}
 
   # ---------------------------------------------------------------------------
-  # 3. Debian / Ubuntu .deb через cargo-deb.
+  # 3. Android (aarch64) через NDK — не блокирует релиз.
+  # ---------------------------------------------------------------------------
+  android:
+    name: build android (aarch64)
+    needs: create-release
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust toolchain + Android target
+        shell: bash
+        run: |
+          channel="$(sed -n 's/^[[:space:]]*channel[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' rust-toolchain.toml)"
+          channel="${channel:-stable}"
+          rustup toolchain install "$channel" --profile minimal
+          rustup default "$channel"
+          rustup target add aarch64-linux-android
+          rustc -V && cargo -V
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android-release
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+          local-cache: true
+      - name: Build for Android
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: ./scripts/build-android.sh
+      - name: Package
+        shell: bash
+        run: |
+          staging="${BIN_NAME}-${{ needs.create-release.outputs.version }}-aarch64-linux-android"
+          mkdir -p "$staging"
+          cp "target/aarch64-linux-android/release/${BIN_NAME}" "$staging/"
+          cp README.md LICENSE .env.example "$staging/" 2>/dev/null || true
+          tar czf "$staging.tar.gz" "$staging"
+          echo "ASSET=$staging.tar.gz" >> "$GITHUB_ENV"
+          size=$(du -h "target/aarch64-linux-android/release/${BIN_NAME}" | cut -f1)
+          echo "- ✅ \`aarch64-linux-android\` — $size" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create-release.outputs.version }}
+          files: ${{ env.ASSET }}
+
+  # ---------------------------------------------------------------------------
+  # 4. Debian / Ubuntu .deb через cargo-deb.
   # ---------------------------------------------------------------------------
   debian:
     name: package .deb
     needs: create-release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: |
+          channel="$(sed -n 's/^[[:space:]]*channel[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' rust-toolchain.toml)"
+          channel="${channel:-stable}"
+          rustup toolchain install "$channel" --profile minimal
+          rustup default "$channel"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: debian
       - name: Install cargo-deb
         run: cargo install cargo-deb --locked
       - name: Build .deb
-        run: cargo deb -p whatcode-cli --output target/debian/whatcode.deb
-      - name: Rename with version
-        run: |
-          mv target/debian/whatcode.deb "whatcode_${{ needs.create-release.outputs.version }}_amd64.deb"
+        run: cargo deb -p whatcode-cli --output "whatcode_${{ needs.create-release.outputs.version }}_amd64.deb"
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.version }}
+          tag_name: ${{ needs.create-release.outputs.version }}
           files: whatcode_${{ needs.create-release.outputs.version }}_amd64.deb
 
   # ---------------------------------------------------------------------------
-  # 4. Arch Linux: генерируем PKGBUILD/.SRCINFO и (опционально) публикуем в AUR.
+  # 5. Arch Linux: PKGBUILD и (опционально) публикация в AUR.
   # ---------------------------------------------------------------------------
   arch-aur:
     name: Arch AUR PKGBUILD
     needs: [create-release, build]
     runs-on: ubuntu-latest
     env:
-      # secrets нельзя использовать прямо в `if`, поэтому пробрасываем в env.
       AUR_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Render PKGBUILD
         run: |
           version="${{ needs.create-release.outputs.version }}"
@@ -175,7 +245,7 @@ jobs:
           path: PKGBUILD
       - name: Publish to AUR
         if: ${{ env.AUR_KEY != '' }}
-        uses: KSXGitHub/github-actions-deploy-aur@v3
+        uses: KSXGitHub/github-actions-deploy-aur@v4
         with:
           pkgname: whatcode-bin
           pkgbuild: ./PKGBUILD
@@ -185,51 +255,47 @@ jobs:
           commit_message: "Update to ${{ needs.create-release.outputs.version }}"
 
   # ---------------------------------------------------------------------------
-  # 5. NixOS: проверяем, что flake собирается.
+  # 6. NixOS: проверяем, что flake собирается.
   # ---------------------------------------------------------------------------
   nix:
     name: Nix build
     needs: create-release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v27
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: "experimental-features = nix-command flakes"
       - name: Build flake
         run: nix build .#default --print-build-logs
 
   # ---------------------------------------------------------------------------
-  # 6. Android (aarch64) — best-effort, не блокирует релиз.
+  # 7. Финальная сводка релиза.
   # ---------------------------------------------------------------------------
-  android:
-    name: Android aarch64 (best-effort)
-    needs: create-release
+  release-summary:
+    name: Release summary
+    if: always()
+    needs: [create-release, build, android, debian, arch-aur, nix]
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android
-      - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk --locked
-      - name: Set up NDK
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r27
-      - name: Build for Android
-        run: cargo ndk -t arm64-v8a build --release --bin ${{ env.BIN_NAME }}
-      - name: Package
+      - name: Report
         run: |
-          staging="${BIN_NAME}-${{ needs.create-release.outputs.version }}-aarch64-linux-android"
-          mkdir -p "$staging"
-          cp target/aarch64-linux-android/release/${BIN_NAME} "$staging/" 2>/dev/null || true
-          tar czf "$staging.tar.gz" "$staging"
-          echo "ASSET=$staging.tar.gz" >> "$GITHUB_ENV"
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.create-release.outputs.version }}
-          files: ${{ env.ASSET }}
+          v="${{ needs.create-release.outputs.version }}"
+          {
+            echo "## 📦 Итог релиза $v"
+            echo ""
+            echo "| Джоб | Статус |"
+            echo "|------|--------|"
+            echo "| desktop-бинари | ${{ needs.build.result }} |"
+            echo "| android | ${{ needs.android.result }} |"
+            echo "| .deb | ${{ needs.debian.result }} |"
+            echo "| AUR PKGBUILD | ${{ needs.arch-aur.result }} |"
+            echo "| Nix | ${{ needs.nix.result }} |"
+            echo ""
+            echo "Черновик релиза создан; проверьте артефакты на странице Releases."
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Гейтом релиза считаем обязательные desktop-бинари.
+          if [ "${{ needs.build.result }}" != "success" ]; then
+            echo "::error::сборка desktop-бинарей провалилась"
+            exit 1
+          fi
