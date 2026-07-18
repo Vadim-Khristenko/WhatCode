@@ -6,13 +6,13 @@ mod doctor;
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
+use tokio::sync::Mutex;
 use whatcode_agent::{run_tool_loop, Supervisor};
 use whatcode_core::persona;
 use whatcode_core::{AppConfig, ContextManager, DialogueMemory, LongMemoryStore, Message};
 use whatcode_llm::ChatClient;
 use whatcode_tools::ToolRegistry;
 use whatcode_tui::App;
-use tokio::sync::Mutex;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -149,8 +149,8 @@ async fn run_oneshot(config: &AppConfig, prompt: &str) -> anyhow::Result<()> {
     let (long_memory, mem_block) = load_long_memory(config);
     let registry: ToolRegistry = whatcode_tools::build_registry(config, long_memory, config.mode);
 
-    let mut messages = selected_persona
-        .bootstrap_messages(Some(client.model_name()), mem_block.as_deref());
+    let mut messages =
+        selected_persona.bootstrap_messages(Some(client.model_name()), mem_block.as_deref());
     // Кратковременная история для связности.
     let memory = DialogueMemory::new(
         &config.memory.path,

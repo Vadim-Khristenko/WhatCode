@@ -1,7 +1,7 @@
 //! Кратковременная память диалога: персистентная история сообщений в JSON.
 //! Порт `brain/memory.py`. Хранит только роли user/assistant с непустым текстом.
 
-use crate::error::{WhatCodeError, Result};
+use crate::error::{Result, WhatCodeError};
 use crate::message::{Message, Role};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};

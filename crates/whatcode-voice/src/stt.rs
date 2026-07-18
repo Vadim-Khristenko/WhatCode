@@ -10,9 +10,9 @@
 //! локально, так и через облако.
 
 use base64::Engine;
-use whatcode_core::config::{SttConfig, SttProvider};
 use serde_json::json;
 use std::time::Duration;
+use whatcode_core::config::{SttConfig, SttProvider};
 
 /// Распознаватель речи.
 #[derive(Debug, Clone)]

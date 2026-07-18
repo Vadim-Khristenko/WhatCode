@@ -3,10 +3,10 @@
 //! плеером — без нативных аудио-зависимостей.
 
 use base64::Engine;
-use whatcode_core::config::{TtsProvider, VoiceConfig};
 use serde_json::json;
 use std::process::Stdio;
 use std::time::Duration;
+use whatcode_core::config::{TtsProvider, VoiceConfig};
 
 /// Синтезировать речь и проиграть её. Возвращает текстовую ошибку при сбое.
 pub async fn synthesize_and_play(
@@ -162,7 +162,9 @@ async fn edge(cfg: &VoiceConfig, text: &str) -> Result<Vec<u8>, String> {
         .stderr(std::process::Stdio::null())
         .status()
         .await
-        .map_err(|e| format!("не удалось запустить `edge-tts`: {e}. Установите: uv pip install edge-tts"))?;
+        .map_err(|e| {
+            format!("не удалось запустить `edge-tts`: {e}. Установите: uv pip install edge-tts")
+        })?;
     if !status.success() {
         return Err("`edge-tts` завершился с ошибкой".into());
     }

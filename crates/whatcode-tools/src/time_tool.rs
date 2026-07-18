@@ -2,8 +2,8 @@
 
 use crate::registry::Tool;
 use async_trait::async_trait;
-use whatcode_core::{ToolCall, ToolResult, ToolSpec};
 use serde_json::json;
+use whatcode_core::{ToolCall, ToolResult, ToolSpec};
 
 /// `current_time` — текущая дата/время в UTC.
 #[derive(Default)]

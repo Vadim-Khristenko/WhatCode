@@ -5,7 +5,9 @@
 //! промпт без лишних аллокаций.
 
 use crate::message::Message;
-use crate::persona::common::{bullet_block, normalize, should_use_compact_bootstrap, Persona, PersonaColor};
+use crate::persona::common::{
+    bullet_block, normalize, should_use_compact_bootstrap, Persona, PersonaColor,
+};
 
 /// Персона Герты.
 #[derive(Debug, Clone, Copy)]
@@ -436,9 +438,7 @@ mod tests {
     #[test]
     fn persona_repair_triggers_on_forbidden() {
         assert!(Herta.needs_persona_repair("Я ваш ассистент и готова помочь"));
-        assert!(!Herta.needs_persona_repair(
-            "Допустимо. Почти на уровне моих марионеток."
-        ));
+        assert!(!Herta.needs_persona_repair("Допустимо. Почти на уровне моих марионеток."));
     }
 
     #[test]

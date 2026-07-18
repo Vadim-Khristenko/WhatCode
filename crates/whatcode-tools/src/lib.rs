@@ -6,8 +6,8 @@
 
 #![forbid(unsafe_code)]
 
-pub mod builder;
 pub mod build_tools;
+pub mod builder;
 pub mod code_tools;
 pub mod external_agent;
 pub mod fs_tools;
@@ -30,6 +30,8 @@ pub mod util;
 pub mod web_search;
 
 pub use builder::build_registry;
-pub use external_agent::{availability_report as external_agents_report, detect as detect_external_agents};
+pub use external_agent::{
+    availability_report as external_agents_report, detect as detect_external_agents,
+};
 pub use registry::{Tool, ToolRegistry};
 pub use skills::SkillLibrary;

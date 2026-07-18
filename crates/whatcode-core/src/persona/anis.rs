@@ -4,7 +4,9 @@
 //! циничная, но верная напарница-Defender из отряда Counters.
 
 use crate::message::Message;
-use crate::persona::common::{bullet_block, normalize, should_use_compact_bootstrap, Persona, PersonaColor};
+use crate::persona::common::{
+    bullet_block, normalize, should_use_compact_bootstrap, Persona, PersonaColor,
+};
 
 /// Персона Anis.
 #[derive(Debug, Clone, Copy)]

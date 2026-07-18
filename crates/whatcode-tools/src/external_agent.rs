@@ -68,7 +68,9 @@ fn parse_custom(defs: &[String]) -> Vec<AgentSpec> {
         };
         let id = id.trim();
         let mut parts = rest.split_whitespace();
-        let Some(program) = parts.next() else { continue };
+        let Some(program) = parts.next() else {
+            continue;
+        };
         let base_args: Vec<String> = parts.map(|s| s.to_string()).collect();
         if id.is_empty() {
             continue;
@@ -273,7 +275,11 @@ impl Tool for ExternalAgentTool {
         .await
         {
             Ok(out) => {
-                let status = if out.success { "успех" } else { "ошибка" };
+                let status = if out.success {
+                    "успех"
+                } else {
+                    "ошибка"
+                };
                 let body = if out.combined.is_empty() {
                     "(нет вывода)".to_string()
                 } else {

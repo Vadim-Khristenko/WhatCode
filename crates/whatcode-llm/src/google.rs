@@ -6,10 +6,10 @@
 use crate::retry::{is_retryable_status, with_backoff};
 use crate::{sanitize_reply, ChatClient};
 use async_trait::async_trait;
-use whatcode_core::config::GoogleAiConfig;
-use whatcode_core::{WhatCodeError, Message, Result, Role};
 use serde_json::{json, Value};
 use std::time::Duration;
+use whatcode_core::config::GoogleAiConfig;
+use whatcode_core::{Message, Result, Role, WhatCodeError};
 
 pub struct GoogleAiClient {
     config: GoogleAiConfig,

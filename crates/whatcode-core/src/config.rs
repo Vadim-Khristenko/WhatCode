@@ -70,9 +70,7 @@ impl LlmProvider {
             "google_ai" | "google" | "gemini" => Self::GoogleAi,
             "anthropic" | "claude" => Self::Anthropic,
             "fireworks" => Self::Fireworks,
-            "opencode-go" | "opencode_go" | "go" | "zen-go" | "zen_go" => {
-                Self::OpenCodeGo
-            }
+            "opencode-go" | "opencode_go" | "go" | "zen-go" | "zen_go" => Self::OpenCodeGo,
             _ => Self::Ollama,
         }
     }
@@ -703,10 +701,7 @@ impl AppConfig {
 
         cfg.opencode_go = OpenAiCompatConfig {
             api_key: env_opt("OPENCODE_GO_API_KEY").or_else(|| env_opt("ZEN_GO_API_KEY")),
-            base_url: env_str(
-                "OPENCODE_GO_BASE_URL",
-                "https://opencode.ai/zen/go/v1",
-            ),
+            base_url: env_str("OPENCODE_GO_BASE_URL", "https://opencode.ai/zen/go/v1"),
             model: env_str("OPENCODE_GO_MODEL", "kimi-k2.7-code"),
             timeout_seconds: env_parse("OPENCODE_GO_TIMEOUT_SECONDS", 120.0),
             temperature: env_parse("OPENCODE_GO_TEMPERATURE", 0.55),

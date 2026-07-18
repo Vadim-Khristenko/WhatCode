@@ -18,8 +18,8 @@ pub use read::*;
 pub use write::*;
 
 use crate::util::run_capture;
-use whatcode_core::ToolResult;
 use std::path::PathBuf;
+use whatcode_core::ToolResult;
 
 const TIMEOUT_SECS: u64 = 30;
 const LONG_TIMEOUT_SECS: u64 = 120;
@@ -63,14 +63,12 @@ impl GitContext {
 
     /// Выполнить git-команду с одним дополнительным проверенным аргументом.
     /// Если аргумент не проходит валидацию, возвращает `ToolResult::rejected`.
-    pub async fn git_safe_arg(
-        &self,
-        tool: &'static str,
-        args: &[&str],
-        extra: &str,
-    ) -> ToolResult {
+    pub async fn git_safe_arg(&self, tool: &'static str, args: &[&str], extra: &str) -> ToolResult {
         if !Self::safe_arg(extra) {
-            return ToolResult::rejected(tool, "аргумент не должен содержать `..` или начинаться с `-`");
+            return ToolResult::rejected(
+                tool,
+                "аргумент не должен содержать `..` или начинаться с `-`",
+            );
         }
         let mut full = args.to_vec();
         full.push(extra);

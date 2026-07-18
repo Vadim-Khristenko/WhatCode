@@ -16,21 +16,21 @@ use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
 use futures::StreamExt;
-use whatcode_agent::{run_tool_loop, AgentEvent, AgentStatus, AgentTask, Supervisor};
-use whatcode_core::persona;
-use whatcode_core::persona::Persona;
-use whatcode_core::{
-    estimate_total_tokens, CompactionDecision, CompactionPlan, ContextManager, WhatCodeError, Message,
-    Result,
-};
-use whatcode_llm::ChatClient;
-use whatcode_tools::ToolRegistry;
-use whatcode_voice::{Stt, Voice};
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use std::io::{self, Stdout};
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use whatcode_agent::{run_tool_loop, AgentEvent, AgentStatus, AgentTask, Supervisor};
+use whatcode_core::persona;
+use whatcode_core::persona::Persona;
+use whatcode_core::{
+    estimate_total_tokens, CompactionDecision, CompactionPlan, ContextManager, Message, Result,
+    WhatCodeError,
+};
+use whatcode_llm::ChatClient;
+use whatcode_tools::ToolRegistry;
+use whatcode_voice::{Stt, Voice};
 
 /// Внутренние события от фоновых задач к управляющему циклу.
 #[derive(Debug)]
@@ -96,18 +96,12 @@ impl App {
 
         let provider = client.provider_name().to_string();
         let model = client.model_name().to_string();
-        let conversation =
-            persona.bootstrap_messages(Some(&model), long_memory_block.as_deref());
+        let conversation = persona.bootstrap_messages(Some(&model), long_memory_block.as_deref());
 
         let (backend_tx, backend_rx) = mpsc::unbounded_channel();
         let (agent_tx, agent_rx) = mpsc::unbounded_channel();
 
-        let mut state = AppState::new(
-            provider,
-            model,
-            context_limit,
-            persona.display_name(),
-        );
+        let mut state = AppState::new(provider, model, context_limit, persona.display_name());
         state.context_used = estimate_total_tokens(&conversation);
         state.mode_label = registry.mode().as_str().to_string();
         let tool_count = registry.len();
@@ -616,7 +610,11 @@ impl App {
                 Ok(out) => Backend::Notice(format!(
                     "[{} · {}]\n{}",
                     spec.display,
-                    if out.success { "успех" } else { "ошибка" },
+                    if out.success {
+                        "успех"
+                    } else {
+                        "ошибка"
+                    },
                     out.combined
                 )),
                 Err(e) => Backend::Notice(format!("[{}] сбой: {e}", spec.display)),
@@ -773,7 +771,12 @@ impl App {
         let tail: Vec<Message> = self
             .conversation
             .iter()
-            .filter(|m| matches!(m.role, whatcode_core::Role::User | whatcode_core::Role::Assistant))
+            .filter(|m| {
+                matches!(
+                    m.role,
+                    whatcode_core::Role::User | whatcode_core::Role::Assistant
+                )
+            })
             .rev()
             .take(12)
             .cloned()

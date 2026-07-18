@@ -1,7 +1,7 @@
 //! Долговременная память: персистентные факты между сессиями.
 //! Порт `brain/long_memory.py`. Дедупликация по нормализованному содержимому.
 
-use crate::error::{WhatCodeError, Result};
+use crate::error::{Result, WhatCodeError};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 

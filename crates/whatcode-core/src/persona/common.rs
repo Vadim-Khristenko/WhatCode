@@ -156,7 +156,8 @@ impl Persona for DefaultPersona {
         "Вы — WhatCode, ассистент для разработки. \n\
          Отвечайте по существу, кратко и точно. \n\
          Цените чистоту кода, модульность, типизацию и надёжность. \n\
-         Никогда не выводите теги thinking или внутренние рассуждения.".to_string()
+         Никогда не выводите теги thinking или внутренние рассуждения."
+            .to_string()
     }
 
     fn bootstrap_messages(
@@ -193,9 +194,16 @@ impl Persona for DefaultPersona {
 
     fn is_identity_query(&self, text: &str) -> bool {
         let n = normalize(text);
-        ["кто ты", "кто вы", "опиши себя", "представься", "что ты такое", "что вы такое"]
-            .iter()
-            .any(|p| n.contains(p))
+        [
+            "кто ты",
+            "кто вы",
+            "опиши себя",
+            "представься",
+            "что ты такое",
+            "что вы такое",
+        ]
+        .iter()
+        .any(|p| n.contains(p))
     }
 
     fn is_casual_query(&self, text: &str) -> bool {
@@ -207,9 +215,14 @@ impl Persona for DefaultPersona {
 
     fn needs_persona_repair(&self, reply: &str) -> bool {
         let n = normalize(reply);
-        ["я ваш ассистент", "я ассистент", "языковая модель", "обычный ассистент"]
-            .iter()
-            .any(|p| n.contains(p))
+        [
+            "я ваш ассистент",
+            "я ассистент",
+            "языковая модель",
+            "обычный ассистент",
+        ]
+        .iter()
+        .any(|p| n.contains(p))
     }
 
     fn build_identity_reply(&self, user_text: &str) -> Option<String> {

@@ -25,7 +25,7 @@ pub mod wakeword;
 
 pub use config::{AppConfig, LlmProvider};
 pub use context::{CompactionDecision, CompactionPlan, ContextManager};
-pub use error::{WhatCodeError, Result};
+pub use error::{Result, WhatCodeError};
 pub use long_memory::{Fact, FactCategory, FactSource, LongMemoryStore};
 pub use memory::DialogueMemory;
 pub use message::{estimate_tokens, estimate_total_tokens, Message, Role};

@@ -27,7 +27,10 @@ impl Tool for GitAddTool {
             Some(path) if GitContext::safe_arg(&path) => {
                 self.ctx.git("git_add", &["add", "--", &path]).await
             }
-            Some(_) => ToolResult::rejected("git_add", "путь не должен содержать `..` или начинаться с `-`"),
+            Some(_) => ToolResult::rejected(
+                "git_add",
+                "путь не должен содержать `..` или начинаться с `-`",
+            ),
             None => self.ctx.git("git_add", &["add", "-A"]).await,
         }
     }
@@ -53,7 +56,9 @@ impl Tool for GitResetHeadTool {
     async fn call(&self, call: &ToolCall) -> ToolResult {
         match call.arg_str("path") {
             Some(path) if GitContext::safe_arg(&path) => {
-                self.ctx.git("git_reset_head", &["reset", "HEAD", "--", &path]).await
+                self.ctx
+                    .git("git_reset_head", &["reset", "HEAD", "--", &path])
+                    .await
             }
             Some(_) => ToolResult::rejected("git_reset_head", "недопустимый путь"),
             None => self.ctx.git("git_reset_head", &["reset", "HEAD"]).await,
@@ -110,7 +115,9 @@ impl Tool for GitPushTool {
         .destructive()
     }
     async fn call(&self, call: &ToolCall) -> ToolResult {
-        let remote = call.arg_str("remote").unwrap_or_else(|| "origin".to_string());
+        let remote = call
+            .arg_str("remote")
+            .unwrap_or_else(|| "origin".to_string());
         let branch = call.arg_str("branch").unwrap_or_default();
         if !GitContext::safe_arg(&remote) {
             return ToolResult::rejected("git_push", "недопустимое имя remote");
@@ -118,7 +125,9 @@ impl Tool for GitPushTool {
         if branch.is_empty() {
             self.ctx.git_long("git_push", &["push", &remote]).await
         } else if GitContext::safe_arg(&branch) {
-            self.ctx.git_long("git_push", &["push", &remote, &branch]).await
+            self.ctx
+                .git_long("git_push", &["push", &remote, &branch])
+                .await
         } else {
             ToolResult::rejected("git_push", "недопустимое имя ветки")
         }
@@ -139,14 +148,26 @@ impl Tool for GitPullTool {
             "Получить изменения из удалённого репозитория Git (`git pull`). Может вызвать merge. \
              Параметр `remote` (по умолчанию origin) и `branch` (по умолчанию текущая).",
             vec![
-                ToolParameter::new("remote", ParamType::String, "Имя remote (по умолчанию origin)", false),
-                ToolParameter::new("branch", ParamType::String, "Имя ветки (по умолчанию текущая)", false),
+                ToolParameter::new(
+                    "remote",
+                    ParamType::String,
+                    "Имя remote (по умолчанию origin)",
+                    false,
+                ),
+                ToolParameter::new(
+                    "branch",
+                    ParamType::String,
+                    "Имя ветки (по умолчанию текущая)",
+                    false,
+                ),
             ],
         )
         .destructive()
     }
     async fn call(&self, call: &ToolCall) -> ToolResult {
-        let remote = call.arg_str("remote").unwrap_or_else(|| "origin".to_string());
+        let remote = call
+            .arg_str("remote")
+            .unwrap_or_else(|| "origin".to_string());
         let branch = call.arg_str("branch").unwrap_or_default();
         if !GitContext::safe_arg(&remote) {
             return ToolResult::rejected("git_pull", "недопустимое имя remote");
@@ -154,7 +175,9 @@ impl Tool for GitPullTool {
         if branch.is_empty() {
             self.ctx.git_long("git_pull", &["pull", &remote]).await
         } else if GitContext::safe_arg(&branch) {
-            self.ctx.git_long("git_pull", &["pull", &remote, &branch]).await
+            self.ctx
+                .git_long("git_pull", &["pull", &remote, &branch])
+                .await
         } else {
             ToolResult::rejected("git_pull", "недопустимое имя ветки")
         }
@@ -225,9 +248,24 @@ impl Tool for GitStashTool {
             "Управлять stash Git. `action` — push (спрятать), pop (вернуть), list, drop, clear. \
              Параметр `message` только для push.",
             vec![
-                ToolParameter::new("action", ParamType::String, "push | pop | list | drop | clear", true),
-                ToolParameter::new("message", ParamType::String, "Сообщение stash (только для push)", false),
-                ToolParameter::new("index", ParamType::Integer, "Индекс stash (для pop/drop)", false),
+                ToolParameter::new(
+                    "action",
+                    ParamType::String,
+                    "push | pop | list | drop | clear",
+                    true,
+                ),
+                ToolParameter::new(
+                    "message",
+                    ParamType::String,
+                    "Сообщение stash (только для push)",
+                    false,
+                ),
+                ToolParameter::new(
+                    "index",
+                    ParamType::Integer,
+                    "Индекс stash (для pop/drop)",
+                    false,
+                ),
             ],
         )
         .write()
@@ -242,7 +280,9 @@ impl Tool for GitStashTool {
                 if msg.is_empty() {
                     self.ctx.git("git_stash", &["stash", "push"]).await
                 } else {
-                    self.ctx.git("git_stash", &["stash", "push", "-m", &msg]).await
+                    self.ctx
+                        .git("git_stash", &["stash", "push", "-m", &msg])
+                        .await
                 }
             }
             "pop" => {
@@ -265,7 +305,10 @@ impl Tool for GitStashTool {
                 self.ctx.git("git_stash", &["stash", "drop", &idx]).await
             }
             "clear" => self.ctx.git("git_stash", &["stash", "clear"]).await,
-            _ => ToolResult::rejected("git_stash", "неизвестный action: push | pop | list | drop | clear"),
+            _ => ToolResult::rejected(
+                "git_stash",
+                "неизвестный action: push | pop | list | drop | clear",
+            ),
         }
     }
 }
@@ -331,7 +374,9 @@ impl Tool for GitRevertTool {
         if !GitContext::safe_arg(&r) {
             return ToolResult::rejected("git_revert", "недопустимая ссылка");
         }
-        self.ctx.git("git_revert", &["revert", "--no-edit", &r]).await
+        self.ctx
+            .git("git_revert", &["revert", "--no-edit", &r])
+            .await
     }
 }
 
@@ -393,7 +438,12 @@ impl Tool for GitCherryPickTool {
             "git_cherry_pick",
             "Применить изменения указанного коммита на текущую ветку (`git cherry-pick`). \
              Параметр `ref` обязателен. Может вызвать конфликт.",
-            vec![ToolParameter::new("ref", ParamType::String, "Хеш/ссылка коммита", true)],
+            vec![ToolParameter::new(
+                "ref",
+                ParamType::String,
+                "Хеш/ссылка коммита",
+                true,
+            )],
         )
         .write()
     }
@@ -422,7 +472,12 @@ impl Tool for GitCleanTool {
             "Удалить неотслеживаемые файлы Git (`git clean`). ОПАСНО: безвозвратно удаляет файлы. \
              Параметр `dry_run=true` показывает, что будет удалено, без реального удаления. \
              По умолчанию dry_run=true.",
-            vec![ToolParameter::new("dry_run", ParamType::Boolean, "Показать, что будет удалено (true по умолчанию)", false)],
+            vec![ToolParameter::new(
+                "dry_run",
+                ParamType::Boolean,
+                "Показать, что будет удалено (true по умолчанию)",
+                false,
+            )],
         )
         .destructive()
     }
@@ -473,7 +528,9 @@ impl Tool for GitMergeTool {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
         if no_ff {
-            self.ctx.git("git_merge", &["merge", "--no-ff", &branch]).await
+            self.ctx
+                .git("git_merge", &["merge", "--no-ff", &branch])
+                .await
         } else {
             self.ctx.git("git_merge", &["merge", &branch]).await
         }

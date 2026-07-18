@@ -4,12 +4,12 @@
 
 use crate::state::{AppState, Focus, LineKind};
 use crate::theme::Theme;
-use whatcode_agent::AgentStatus;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Borders, Clear, Gauge, Paragraph, Wrap};
 use ratatui::Frame;
+use whatcode_agent::AgentStatus;
 
 /// Оценка числа экранных строк для текста при заданной ширине (для прокрутки).
 /// Ширина 0 трактуется как 1, чтобы исключить деление на ноль.

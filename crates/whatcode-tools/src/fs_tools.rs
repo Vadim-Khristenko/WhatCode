@@ -5,8 +5,8 @@ use crate::registry::Tool;
 use crate::safety::path_within_root;
 use crate::util::{truncate, MAX_OUTPUT_CHARS};
 use async_trait::async_trait;
-use whatcode_core::{ParamType, ToolCall, ToolParameter, ToolResult, ToolSpec};
 use std::path::PathBuf;
+use whatcode_core::{ParamType, ToolCall, ToolParameter, ToolResult, ToolSpec};
 
 fn root() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))

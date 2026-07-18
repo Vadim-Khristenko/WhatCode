@@ -2,10 +2,10 @@
 
 use crate::registry::Tool;
 use async_trait::async_trait;
-use whatcode_core::config::WebSearchConfig;
-use whatcode_core::{ParamType, ToolCall, ToolParameter, ToolResult, ToolSpec};
 use serde_json::{json, Value};
 use std::time::Duration;
+use whatcode_core::config::WebSearchConfig;
+use whatcode_core::{ParamType, ToolCall, ToolParameter, ToolResult, ToolSpec};
 
 pub struct WebSearchTool {
     config: WebSearchConfig,

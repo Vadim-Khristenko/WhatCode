@@ -4,10 +4,10 @@
 use crate::retry::{is_retryable_status, with_backoff};
 use crate::{sanitize_reply, ChatClient, ChatResponse};
 use async_trait::async_trait;
-use whatcode_core::config::OpenAiCompatConfig;
-use whatcode_core::{WhatCodeError, Message, Result, ToolCall, ToolSpec};
 use serde_json::{json, Value};
 use std::time::Duration;
+use whatcode_core::config::OpenAiCompatConfig;
+use whatcode_core::{Message, Result, ToolCall, ToolSpec, WhatCodeError};
 
 pub struct OpenAiCompatClient {
     provider: &'static str,

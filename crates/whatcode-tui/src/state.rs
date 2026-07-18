@@ -94,9 +94,8 @@ impl AppState {
         persona_name: impl Into<String>,
     ) -> Self {
         let persona_name = persona_name.into();
-        let welcome = format!(
-            "{persona_name} на связи. Печатайте запрос и жмите Enter. F1 — справка."
-        );
+        let welcome =
+            format!("{persona_name} на связи. Печатайте запрос и жмите Enter. F1 — справка.");
         Self {
             lines: vec![ChatLine::notice(welcome)],
             input: String::new(),

@@ -85,7 +85,10 @@ impl Tool for GitDiffTool {
         match call.arg_str("path") {
             Some(path) => {
                 if !GitContext::safe_arg(&path) {
-                    return ToolResult::rejected("git_diff", "путь не должен содержать `..` или начинаться с `-`");
+                    return ToolResult::rejected(
+                        "git_diff",
+                        "путь не должен содержать `..` или начинаться с `-`",
+                    );
                 }
                 self.ctx.git("git_diff", &["diff", "--", &path]).await
             }
@@ -153,7 +156,9 @@ impl Tool for GitBranchRemoteTool {
         )
     }
     async fn call(&self, _call: &ToolCall) -> ToolResult {
-        self.ctx.git("git_branch_remote", &["branch", "-a", "-vv"]).await
+        self.ctx
+            .git("git_branch_remote", &["branch", "-a", "-vv"])
+            .await
     }
 }
 

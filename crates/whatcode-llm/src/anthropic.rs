@@ -12,10 +12,10 @@
 use crate::retry::{is_retryable_status, with_backoff};
 use crate::{sanitize_reply, ChatClient, ChatResponse};
 use async_trait::async_trait;
-use whatcode_core::config::AnthropicConfig;
-use whatcode_core::{WhatCodeError, Message, Result, Role, ToolCall, ToolSpec};
 use serde_json::{json, Value};
 use std::time::Duration;
+use whatcode_core::config::AnthropicConfig;
+use whatcode_core::{Message, Result, Role, ToolCall, ToolSpec, WhatCodeError};
 
 pub struct AnthropicClient {
     config: AnthropicConfig,
@@ -200,7 +200,10 @@ impl ChatClient for AnthropicClient {
 
     async fn warm_up(&self) -> Result<()> {
         if self.config.api_key.is_none() {
-            return Err(WhatCodeError::llm("anthropic", "не задан ANTHROPIC_API_KEY"));
+            return Err(WhatCodeError::llm(
+                "anthropic",
+                "не задан ANTHROPIC_API_KEY",
+            ));
         }
         Ok(())
     }

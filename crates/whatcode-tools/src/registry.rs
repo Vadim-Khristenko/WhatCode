@@ -6,9 +6,9 @@
 //! и исполнение (`dispatch`) согласованы с текущим режимом.
 
 use async_trait::async_trait;
-use whatcode_core::{AgentMode, Permission, Policy, ToolCall, ToolResult, ToolSpec};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use whatcode_core::{AgentMode, Permission, Policy, ToolCall, ToolResult, ToolSpec};
 
 /// Один исполняемый инструмент.
 #[async_trait]
@@ -157,8 +157,8 @@ impl ToolRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use whatcode_core::{ParamType, ToolParameter};
     use serde_json::json;
+    use whatcode_core::{ParamType, ToolParameter};
 
     struct Echo;
     #[async_trait]

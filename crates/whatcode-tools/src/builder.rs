@@ -21,10 +21,10 @@ use crate::system_actions::{CreateNoteTool, OpenUrlTool};
 use crate::time_tool::CurrentTimeTool;
 use crate::toolchain::{CheckToolchainTool, InstallToolchainTool};
 use crate::web_search::WebSearchTool;
-use whatcode_core::config::AppConfig;
-use whatcode_core::{AgentMode, LongMemoryStore, ToolRisk};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use whatcode_core::config::AppConfig;
+use whatcode_core::{AgentMode, LongMemoryStore, ToolRisk};
 
 /// Каталог навыков из окружения `WHATCODE_SKILLS_DIR` (по умолчанию `skills`).
 fn skills_dir() -> String {

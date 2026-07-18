@@ -13,7 +13,7 @@ pub mod openai_compat;
 pub mod retry;
 
 use async_trait::async_trait;
-use whatcode_core::{AppConfig, WhatCodeError, LlmProvider, Message, Result, ToolCall, ToolSpec};
+use whatcode_core::{AppConfig, LlmProvider, Message, Result, ToolCall, ToolSpec, WhatCodeError};
 
 /// Ответ модели: текст и (опционально) запрошенные вызовы инструментов.
 #[derive(Debug, Clone, Default)]
@@ -86,27 +86,35 @@ pub fn build_client(config: &AppConfig) -> Result<Box<dyn ChatClient>> {
             let c = config.fireworks.clone();
             ensure_key(&c.api_key, "fireworks")?;
             Ok(Box::new(openai_compat::OpenAiCompatClient::new(
-                "fireworks", c,
+                "fireworks",
+                c,
             )?))
         }
         LlmProvider::OpenCodeGo => {
             let c = config.opencode_go.clone();
             ensure_key(&c.api_key, "opencode-go")?;
             Ok(Box::new(openai_compat::OpenAiCompatClient::new(
-                "opencode-go", c,
+                "opencode-go",
+                c,
             )?))
         }
         LlmProvider::GoogleAi => {
             let c = config.google_ai.clone();
             if c.api_key.is_none() {
-                return Err(WhatCodeError::llm("google_ai", "не задан GOOGLE_AI_API_KEY"));
+                return Err(WhatCodeError::llm(
+                    "google_ai",
+                    "не задан GOOGLE_AI_API_KEY",
+                ));
             }
             Ok(Box::new(google::GoogleAiClient::new(c)?))
         }
         LlmProvider::Anthropic => {
             let c = config.anthropic.clone();
             if c.api_key.is_none() {
-                return Err(WhatCodeError::llm("anthropic", "не задан ANTHROPIC_API_KEY"));
+                return Err(WhatCodeError::llm(
+                    "anthropic",
+                    "не задан ANTHROPIC_API_KEY",
+                ));
             }
             Ok(Box::new(anthropic::AnthropicClient::new(c)?))
         }
@@ -115,7 +123,10 @@ pub fn build_client(config: &AppConfig) -> Result<Box<dyn ChatClient>> {
 
 fn ensure_key(key: &Option<String>, provider: &str) -> Result<()> {
     if key.is_none() {
-        return Err(WhatCodeError::llm(provider.to_string(), "не задан API-ключ"));
+        return Err(WhatCodeError::llm(
+            provider.to_string(),
+            "не задан API-ключ",
+        ));
     }
     Ok(())
 }

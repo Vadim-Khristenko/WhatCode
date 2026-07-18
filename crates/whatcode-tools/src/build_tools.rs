@@ -7,8 +7,8 @@
 use crate::registry::Tool;
 use crate::util::run_capture;
 use async_trait::async_trait;
-use whatcode_core::{ParamType, ToolCall, ToolParameter, ToolResult, ToolSpec};
 use std::path::Path;
+use whatcode_core::{ParamType, ToolCall, ToolParameter, ToolResult, ToolSpec};
 
 const TIMEOUT_SECS: u64 = 600;
 
@@ -73,12 +73,21 @@ impl Tool for VerifyBuildTool {
             "bun" => ProjectType::TypeScriptBun,
             "npm" => ProjectType::NodeNpm,
             "auto" => detect_project_type(&root),
-            _ => return ToolResult::rejected("verify_build", "target: rust | python | bun | npm | auto"),
+            _ => {
+                return ToolResult::rejected(
+                    "verify_build",
+                    "target: rust | python | bun | npm | auto",
+                )
+            }
         };
 
         let (program, args, label) = match project_type {
             ProjectType::Rust => ("cargo", vec!["check", "--all-targets"], "Rust cargo check"),
-            ProjectType::PythonUv => ("uv", vec!["run", "--", "python", "-m", "compileall", "."], "Python compileall"),
+            ProjectType::PythonUv => (
+                "uv",
+                vec!["run", "--", "python", "-m", "compileall", "."],
+                "Python compileall",
+            ),
             ProjectType::TypeScriptBun => {
                 let package_json = root.join("package.json");
                 let has_build = if package_json.exists() {
@@ -106,16 +115,17 @@ impl Tool for VerifyBuildTool {
 
         match run_capture(program, &args, Some(&root), TIMEOUT_SECS).await {
             Ok(out) => {
-                let status = if out.success { "успех" } else { "ошибка" };
+                let status = if out.success {
+                    "успех"
+                } else {
+                    "ошибка"
+                };
                 let body = if out.combined.is_empty() {
                     "(нет вывода)".to_string()
                 } else {
                     out.combined
                 };
-                ToolResult::ok(
-                    "verify_build",
-                    format!("[{label}] {status}\n{body}"),
-                )
+                ToolResult::ok("verify_build", format!("[{label}] {status}\n{body}"))
             }
             Err(e) => ToolResult::rejected("verify_build", e),
         }

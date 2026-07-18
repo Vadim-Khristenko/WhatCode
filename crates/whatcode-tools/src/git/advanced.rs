@@ -45,11 +45,17 @@ impl Tool for GitRollbackCommitTool {
             _ => return ToolResult::rejected("git_rollback_commit", "mode: soft | mixed | hard"),
         };
 
-        let step1 = self.ctx.git("git_rollback_commit", &["reset", flag, "HEAD~1"]).await;
+        let step1 = self
+            .ctx
+            .git("git_rollback_commit", &["reset", flag, "HEAD~1"])
+            .await;
         if !step1.executed {
             return step1;
         }
-        let step2 = self.ctx.git("git_rollback_commit", &["status", "--short"]).await;
+        let step2 = self
+            .ctx
+            .git("git_rollback_commit", &["status", "--short"])
+            .await;
         ToolResult::ok(
             "git_rollback_commit",
             format!(
@@ -85,7 +91,9 @@ impl Tool for GitSyncBranchTool {
     }
 
     async fn call(&self, call: &ToolCall) -> ToolResult {
-        let remote = call.arg_str("remote").unwrap_or_else(|| "origin".to_string());
+        let remote = call
+            .arg_str("remote")
+            .unwrap_or_else(|| "origin".to_string());
         if !GitContext::safe_arg(&remote) {
             return ToolResult::rejected("git_sync_branch", "недопустимое имя remote");
         }
@@ -151,7 +159,11 @@ impl Tool for GitDiscardChangesTool {
                     .await
             }
             Some(_) => ToolResult::rejected("git_discard_changes", "недопустимый путь"),
-            None => self.ctx.git("git_discard_changes", &["checkout", "--", "."]).await,
+            None => {
+                self.ctx
+                    .git("git_discard_changes", &["checkout", "--", "."])
+                    .await
+            }
         }
     }
 }
@@ -169,7 +181,12 @@ impl Tool for GitCommitAllTool {
             "git_commit_all",
             "Добавить все изменения в индекс и создать коммит (`git add -A && git commit -m`). \
              Параметр `message` обязателен. Не делает push.",
-            vec![ToolParameter::new("message", ParamType::String, "Сообщение коммита", true)],
+            vec![ToolParameter::new(
+                "message",
+                ParamType::String,
+                "Сообщение коммита",
+                true,
+            )],
         )
         .write()
     }

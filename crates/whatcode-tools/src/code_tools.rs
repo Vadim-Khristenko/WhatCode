@@ -4,11 +4,11 @@
 use crate::registry::Tool;
 use crate::safety::path_within_root;
 use async_trait::async_trait;
-use whatcode_core::config::CodeToolsConfig;
-use whatcode_core::{ParamType, ToolCall, ToolParameter, ToolResult, ToolSpec};
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::process::Command;
+use whatcode_core::config::CodeToolsConfig;
+use whatcode_core::{ParamType, ToolCall, ToolParameter, ToolResult, ToolSpec};
 
 const MAX_OUTPUT_CHARS: usize = 4000;
 

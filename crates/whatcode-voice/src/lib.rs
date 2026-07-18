@@ -17,8 +17,8 @@ pub mod stt;
 
 pub use stt::Stt;
 
-use whatcode_core::config::{TtsProvider, VoiceConfig};
 use std::process::{Command, Stdio};
+use whatcode_core::config::{TtsProvider, VoiceConfig};
 
 /// Бэкенд озвучивания.
 #[derive(Debug, Clone)]

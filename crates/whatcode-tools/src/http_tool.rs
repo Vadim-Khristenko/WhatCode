@@ -4,8 +4,8 @@
 use crate::registry::Tool;
 use crate::util::truncate;
 use async_trait::async_trait;
-use whatcode_core::{ParamType, ToolCall, ToolParameter, ToolResult, ToolSpec};
 use std::time::Duration;
+use whatcode_core::{ParamType, ToolCall, ToolParameter, ToolResult, ToolSpec};
 
 pub struct FetchUrlTool {
     http: reqwest::Client,

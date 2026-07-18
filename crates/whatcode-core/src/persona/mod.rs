@@ -12,9 +12,9 @@ pub mod common;
 pub mod herta;
 pub mod miku;
 
+pub use anis::Anis;
 pub use common::{Persona, PersonaColor};
 pub use herta::Herta;
-pub use anis::Anis;
 pub use miku::Miku;
 
 use crate::message::Message;

@@ -85,7 +85,9 @@ impl Theme {
     }
 
     pub fn persona_label(&self) -> Style {
-        Style::default().fg(self.persona).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(self.persona)
+            .add_modifier(Modifier::BOLD)
     }
 
     pub fn user_label(&self) -> Style {

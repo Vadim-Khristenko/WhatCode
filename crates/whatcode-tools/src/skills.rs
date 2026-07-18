@@ -7,8 +7,8 @@
 
 use crate::registry::Tool;
 use async_trait::async_trait;
-use whatcode_core::{ParamType, Skill, ToolCall, ToolParameter, ToolResult, ToolSpec};
 use std::sync::Arc;
+use whatcode_core::{ParamType, Skill, ToolCall, ToolParameter, ToolResult, ToolSpec};
 
 /// Каталог загруженных навыков (иммутабельный после загрузки).
 #[derive(Debug, Clone)]

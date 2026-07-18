@@ -4,11 +4,11 @@
 use crate::registry::Tool;
 use crate::safety::{looks_destructive, path_within_root};
 use async_trait::async_trait;
-use whatcode_core::config::SystemActionsConfig;
-use whatcode_core::{ParamType, ToolCall, ToolParameter, ToolResult, ToolSpec};
 use std::path::PathBuf;
 use std::process::Stdio;
 use tokio::process::Command;
+use whatcode_core::config::SystemActionsConfig;
+use whatcode_core::{ParamType, ToolCall, ToolParameter, ToolResult, ToolSpec};
 
 /// Команда открытия ресурса в зависимости от ОС.
 fn open_command(target: &str) -> Command {
