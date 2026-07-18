@@ -71,7 +71,7 @@ whatcode-cli ── (всё)
 
 Переключение в TUI: `/persona miku`. По умолчанию задаётся через `WHATCODE_PERSONA`.
 
-Досье персон: [`docs/HERTA.md`](docs/HERTA.md) · [`docs/ANIS.md`](docs/ANIS.md) (скоро).  
+Досье персон: [`docs/HERTA.md`](docs/HERTA.md) · [`docs/ANIS.md`](docs/ANIS.md) · [`docs/MIKU.md`](docs/MIKU.md).  
 Подробнее об архитектуре: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Режимы работы
