@@ -556,12 +556,12 @@ impl App {
         )));
 
         let supervisor = self.supervisor.clone();
-        let progress = self.agent_tx.clone();
         let backend = self.backend_tx.clone();
         let input = input.to_string();
+        // Прогресс не форвардим в панель марионеток: иначе сырые выводы producer-ов
+        // и скептиков дублируют итоговый синтез в ленте. Показываем один чистый итог.
         tokio::spawn(async move {
-            let outcome =
-                whatcode_agent::execute_workflow(&supervisor, &spec, &input, Some(progress)).await;
+            let outcome = whatcode_agent::execute_workflow(&supervisor, &spec, &input, None).await;
             let _ = backend.send(Backend::WorkflowDone {
                 id: spec.id.clone(),
                 text: outcome.final_text(),
