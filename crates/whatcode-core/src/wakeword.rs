@@ -69,11 +69,15 @@ impl WakeWordDetector {
 }
 
 /// Нормализация текста: lowercase, удаление знаков препинания и лишних пробелов.
+///
+/// Важно: используем Unicode-aware `to_lowercase`, а не `to_ascii_lowercase`,
+/// иначе кириллица («Герта») не приводится к нижнему регистру и не матчится
+/// с фразами вроде «герта».
 fn normalize(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars() {
         if c.is_alphanumeric() || c.is_whitespace() {
-            out.push(c.to_ascii_lowercase());
+            out.extend(c.to_lowercase());
         } else {
             out.push(' ');
         }
