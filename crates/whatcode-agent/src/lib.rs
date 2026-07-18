@@ -12,7 +12,7 @@ pub mod tool_loop;
 pub mod workflows;
 
 pub use tool_loop::{run as run_tool_loop, ToolLoopOutcome};
-pub use workflows::{find as find_workflow, listing as workflows_listing, WorkflowSpec, WORKFLOWS};
+pub use workflows::{execute as execute_workflow, WorkflowOutcome, WorkflowRegistry, WorkflowSpec};
 
 use std::sync::Arc;
 use std::time::Duration;

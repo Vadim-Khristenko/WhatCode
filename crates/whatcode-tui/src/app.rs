@@ -42,6 +42,7 @@ enum Backend {
     Recap(String),
     Transcript(String),
     Notice(String),
+    WorkflowDone { id: String, text: String },
 }
 
 /// Структурные зависимости приложения (не изменяются по кадрам).
@@ -72,6 +73,8 @@ pub struct App {
     persona: Box<dyn Persona>,
     /// Конфиг внешних агентов (для /agents и /delegate).
     external_agents: whatcode_core::config::ExternalAgentsConfig,
+    /// Реестр мульти-агентных воркфлоу (встроенные + пользовательские TOML).
+    workflows: whatcode_agent::WorkflowRegistry,
 }
 
 impl App {
@@ -133,6 +136,7 @@ impl App {
             agent_rx,
             persona,
             external_agents,
+            workflows: whatcode_agent::WorkflowRegistry::load(),
         }
     }
 
@@ -454,8 +458,8 @@ impl App {
             }
             "workflows" | "wf" => {
                 self.state.push_line(ChatLine::notice(format!(
-                    "Воркфлоу (мульти-агентные пайплайны). Запуск: /workflow <id> [ввод]\n{}",
-                    whatcode_agent::workflows_listing()
+                    "Воркфлоу (мульти-агентные пайплайны: producers → синтез → проверка). Запуск: /workflow <id> [ввод]\n{}",
+                    self.workflows.listing()
                 )));
             }
             "workflow" => {
@@ -463,7 +467,7 @@ impl App {
                 if id.is_empty() {
                     self.state.push_line(ChatLine::notice(format!(
                         "Использование: /workflow <id> [ввод]. Доступные:\n{}",
-                        whatcode_agent::workflows_listing()
+                        self.workflows.listing()
                     )));
                 } else {
                     self.run_workflow(id, input.trim());
@@ -530,27 +534,39 @@ impl App {
         }
     }
 
-    /// Запустить встроенный воркфлоу: развернуть в задачи и раздать марионеткам.
+    /// Запустить воркфлоу: producers (веер) → синтез → опц. проверка, в фоне.
     fn run_workflow(&mut self, id: &str, input: &str) {
-        let Some(wf) = whatcode_agent::find_workflow(id) else {
+        let Some(spec) = self.workflows.find(id).cloned() else {
             self.state.push_line(ChatLine::notice(format!(
                 "Неизвестный воркфлоу «{id}». Список: /workflows"
             )));
             return;
         };
-        let tasks = wf.expand(input);
+        let verify = if spec.verify.is_some() {
+            " → проверка скептиками"
+        } else {
+            ""
+        };
         self.state.push_line(ChatLine::notice(format!(
-            "Воркфлоу «{}» ({}): запускаю {} марионеток параллельно.",
-            wf.id,
-            wf.name,
-            tasks.len()
+            "Воркфлоу «{}» ({}): {} producers → синтез{}. Работаю в фоне…",
+            spec.id,
+            spec.name,
+            spec.producers.len(),
+            verify
         )));
-        for task in tasks {
-            let title: String = task.title.chars().take(28).collect();
-            self.state
-                .upsert_agent(&task.id, Some(title), AgentStatus::Pending, None);
-            self.supervisor.spawn(task, self.agent_tx.clone());
-        }
+
+        let supervisor = self.supervisor.clone();
+        let progress = self.agent_tx.clone();
+        let backend = self.backend_tx.clone();
+        let input = input.to_string();
+        tokio::spawn(async move {
+            let outcome =
+                whatcode_agent::execute_workflow(&supervisor, &spec, &input, Some(progress)).await;
+            let _ = backend.send(Backend::WorkflowDone {
+                id: spec.id.clone(),
+                text: outcome.final_text(),
+            });
+        });
     }
 
     /// Делегировать задачу внешнему CLI-агенту (claude -p, codex exec, …) в фоне.
@@ -674,6 +690,12 @@ impl App {
                 }
             }
             Backend::Notice(text) => self.state.push_line(ChatLine::notice(text)),
+            Backend::WorkflowDone { id, text } => {
+                let body = format!("Воркфлоу «{id}» — итог:\n{text}");
+                self.state.push_line(ChatLine::persona(body.clone()));
+                self.conversation.push(Message::assistant(body));
+                self.recompute_context();
+            }
             Backend::ReplyError(err) => {
                 self.state
                     .push_line(ChatLine::error(format!("Сбой запроса: {err}")));
