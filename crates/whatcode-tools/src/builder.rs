@@ -7,6 +7,7 @@
 
 use crate::build_tools::{ProjectInfoTool, VerifyBuildTool};
 use crate::code_tools::{LintTool, TypeCheckTool};
+use crate::external_agent::ExternalAgentTool;
 use crate::fs_tools::{AppendFileTool, ListDirTool, ReadFileTool, WriteFileTool};
 use crate::git::advanced::*;
 use crate::git::read::*;
@@ -161,6 +162,13 @@ pub fn build_registry(
 
     // --- установка инструментария (опасное) ---
     reg.register(Arc::new(InstallToolchainTool));
+
+    // --- межагентная кооперация (Agent Context Protocol / codex/claude -p) ---
+    if config.external_agents.enabled {
+        reg.register(Arc::new(ExternalAgentTool::new(
+            config.external_agents.clone(),
+        )));
+    }
 
     // --- навыки (прогрессивное раскрытие) ---
     let library = SkillLibrary::load(skills_dir());

@@ -366,6 +366,34 @@ impl Default for AgentConfig {
     }
 }
 
+/// Мост к внешним CLI-агентам (Agent Context Protocol / `codex`, `claude -p`, …).
+///
+/// Позволяет WhatCode делегировать задачу другому агенту, запуская его в
+/// неинтерактивном («headless») режиме и забирая ответ из stdout. Сам инструмент
+/// помечен как `Dangerous`, поэтому в безопасных режимах требует подтверждения.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExternalAgentsConfig {
+    pub enabled: bool,
+    /// Таймаут на один вызов внешнего агента (секунды).
+    pub timeout_seconds: u64,
+    /// Агент по умолчанию, если в вызове не указан явный (`claude`, `codex`, …).
+    pub default_agent: Option<String>,
+    /// Пользовательская команда: `id=программа arg1 arg2 …` (подсказка `{prompt}`
+    /// подставляется, иначе промпт добавляется последним аргументом).
+    pub custom: Vec<String>,
+}
+
+impl Default for ExternalAgentsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            timeout_seconds: 300,
+            default_agent: None,
+            custom: Vec::new(),
+        }
+    }
+}
+
 /// Озвучивание ответов (TTS). Реализация — внешняя системная утилита, поэтому
 /// нативных зависимостей нет. STT (распознавание) — задача следующей итерации.
 /// Провайдер синтеза речи.
@@ -528,6 +556,7 @@ pub struct AppConfig {
     pub wakeword: WakeWordConfig,
     pub context: ContextConfig,
     pub agent: AgentConfig,
+    pub external_agents: ExternalAgentsConfig,
     pub voice: VoiceConfig,
     pub stt: SttConfig,
     /// Стартовый режим работы агента.
@@ -598,6 +627,7 @@ impl Default for AppConfig {
             wakeword: WakeWordConfig::default(),
             context: ContextConfig::default(),
             agent: AgentConfig::default(),
+            external_agents: ExternalAgentsConfig::default(),
             voice: VoiceConfig::default(),
             stt: SttConfig::default(),
             mode: crate::mode::AgentMode::Auto,
@@ -831,6 +861,22 @@ impl AppConfig {
 
         cfg.recap_enabled = env_bool("RECAP_ENABLED", false);
         cfg.recap_every_turns = env_parse("RECAP_EVERY_TURNS", 8);
+
+        cfg.external_agents = ExternalAgentsConfig {
+            enabled: env_bool("WHATCODE_EXTERNAL_AGENTS", true),
+            timeout_seconds: env_parse("WHATCODE_EXTERNAL_AGENT_TIMEOUT", 300),
+            default_agent: env_opt("WHATCODE_EXTERNAL_AGENT_DEFAULT")
+                .map(|s| s.trim().to_lowercase())
+                .filter(|s| !s.is_empty()),
+            custom: env_opt("WHATCODE_EXTERNAL_AGENTS_CUSTOM")
+                .map(|s| {
+                    s.split(';')
+                        .map(|p| p.trim().to_string())
+                        .filter(|p| !p.is_empty())
+                        .collect()
+                })
+                .unwrap_or_default(),
+        };
 
         cfg
     }
