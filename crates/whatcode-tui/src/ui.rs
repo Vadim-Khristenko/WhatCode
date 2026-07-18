@@ -335,6 +335,22 @@ pub fn render_help(frame: &mut Frame, theme: &Theme) {
             theme.dim(),
         )),
         Line::from(Span::styled(
+            "/workflows      список мульти-агентных пайплайнов",
+            theme.dim(),
+        )),
+        Line::from(Span::styled(
+            "/workflow <id>  запустить пайплайн (review|plan|research|debug)",
+            theme.dim(),
+        )),
+        Line::from(Span::styled(
+            "/agents         внешние CLI-агенты (claude|codex|…)",
+            theme.dim(),
+        )),
+        Line::from(Span::styled(
+            "/delegate <id> <задача>  делегировать внешнему агенту",
+            theme.dim(),
+        )),
+        Line::from(Span::styled(
             "/tools          список инструментов",
             theme.dim(),
         )),
@@ -346,7 +362,7 @@ pub fn render_help(frame: &mut Frame, theme: &Theme) {
         )),
         Line::from(Span::styled("/say <текст>    озвучить (TTS)", theme.dim())),
         Line::from(Span::styled(
-            "/persona <id>   herta | anis | default",
+            "/persona <id>   herta | anis | miku | default",
             theme.dim(),
         )),
         Line::from(Span::styled(

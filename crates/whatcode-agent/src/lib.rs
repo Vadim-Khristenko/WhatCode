@@ -9,8 +9,10 @@
 #![forbid(unsafe_code)]
 
 pub mod tool_loop;
+pub mod workflows;
 
 pub use tool_loop::{run as run_tool_loop, ToolLoopOutcome};
+pub use workflows::{find as find_workflow, listing as workflows_listing, WorkflowSpec, WORKFLOWS};
 
 use whatcode_core::config::AgentConfig;
 use whatcode_core::{Message, ToolResult};

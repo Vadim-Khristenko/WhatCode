@@ -126,6 +126,7 @@ async fn run_tui(config: AppConfig) -> anyhow::Result<()> {
         config.recap_every_turns,
         mem_block,
         config.persona.clone(),
+        config.external_agents.clone(),
     );
     app.run().await?;
     Ok(())

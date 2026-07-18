@@ -155,6 +155,40 @@ pub async fn run(config: &AppConfig) -> i32 {
         warns += 1;
     }
 
+    // Персоны.
+    let personas = whatcode_core::persona::common::list()
+        .into_iter()
+        .map(|(id, name)| format!("{id} ({name})"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    line(Level::Ok, "Персоны", &personas);
+
+    // Внешние агенты (Agent Context Protocol).
+    if config.external_agents.enabled {
+        let statuses = whatcode_tools::detect_external_agents(&config.external_agents);
+        let available: Vec<String> = statuses
+            .iter()
+            .filter(|s| s.available)
+            .map(|s| s.id.clone())
+            .collect();
+        if available.is_empty() {
+            line(
+                Level::Warn,
+                "Внешние агенты",
+                "включены, но ни один CLI не найден в PATH (claude, codex, gemini, …)",
+            );
+            warns += 1;
+        } else {
+            line(
+                Level::Ok,
+                "Внешние агенты",
+                &format!("доступны: {}", available.join(", ")),
+            );
+        }
+    } else {
+        line(Level::Ok, "Внешние агенты", "выключены");
+    }
+
     println!("\nИтог: {fails} критичных, {warns} предупреждений.");
     if fails > 0 {
         1

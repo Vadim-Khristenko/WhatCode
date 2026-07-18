@@ -70,6 +70,8 @@ pub struct App {
     agent_rx: mpsc::UnboundedReceiver<AgentEvent>,
     /// Активная персона (динамически выбирается через /persona).
     persona: Box<dyn Persona>,
+    /// Конфиг внешних агентов (для /agents и /delegate).
+    external_agents: whatcode_core::config::ExternalAgentsConfig,
 }
 
 impl App {
@@ -87,6 +89,7 @@ impl App {
         recap_every_turns: u32,
         long_memory_block: Option<String>,
         persona_id: impl Into<String>,
+        external_agents: whatcode_core::config::ExternalAgentsConfig,
     ) -> Self {
         let persona_id = persona_id.into().to_lowercase();
         let persona = persona::common::get(&persona_id);
@@ -110,7 +113,7 @@ impl App {
         let tool_count = registry.len();
         if tool_count > 0 {
             state.push_line(ChatLine::notice(format!(
-                "Доступно инструментов: {tool_count}. Команды: /goal /ask /tools /compact /model /persona /help."
+                "Доступно инструментов: {tool_count}. Команды: /goal /workflows /agents /tools /persona /help."
             )));
         }
 
@@ -135,6 +138,7 @@ impl App {
             agent_tx,
             agent_rx,
             persona,
+            external_agents,
         }
     }
 
@@ -454,6 +458,39 @@ impl App {
                     )));
                 }
             }
+            "workflows" | "wf" => {
+                self.state.push_line(ChatLine::notice(format!(
+                    "Воркфлоу (мульти-агентные пайплайны). Запуск: /workflow <id> [ввод]\n{}",
+                    whatcode_agent::workflows_listing()
+                )));
+            }
+            "workflow" => {
+                let (id, input) = tail.split_once(char::is_whitespace).unwrap_or((tail, ""));
+                if id.is_empty() {
+                    self.state.push_line(ChatLine::notice(format!(
+                        "Использование: /workflow <id> [ввод]. Доступные:\n{}",
+                        whatcode_agent::workflows_listing()
+                    )));
+                } else {
+                    self.run_workflow(id, input.trim());
+                }
+            }
+            "agents" => {
+                let report = whatcode_tools::external_agents_report(&self.external_agents);
+                self.state.push_line(ChatLine::notice(format!(
+                    "Внешние агенты (Agent Context Protocol). Делегирование: /delegate <id> <задача>\n{report}"
+                )));
+            }
+            "delegate" => {
+                let (id, prompt) = tail.split_once(char::is_whitespace).unwrap_or((tail, ""));
+                if id.is_empty() || prompt.trim().is_empty() {
+                    self.state.push_line(ChatLine::notice(
+                        "Использование: /delegate <id агента> <задача>. Список: /agents",
+                    ));
+                } else {
+                    self.delegate_external(id, prompt.trim());
+                }
+            }
             "compact" => self.force_compact(),
             "recap" => match tail {
                 "on" => {
@@ -497,6 +534,95 @@ impl App {
                 .state
                 .push_line(ChatLine::notice(format!("Неизвестная команда: /{other}"))),
         }
+    }
+
+    /// Запустить встроенный воркфлоу: развернуть в задачи и раздать марионеткам.
+    fn run_workflow(&mut self, id: &str, input: &str) {
+        let Some(wf) = whatcode_agent::find_workflow(id) else {
+            self.state.push_line(ChatLine::notice(format!(
+                "Неизвестный воркфлоу «{id}». Список: /workflows"
+            )));
+            return;
+        };
+        let tasks = wf.expand(input);
+        self.state.push_line(ChatLine::notice(format!(
+            "Воркфлоу «{}» ({}): запускаю {} марионеток параллельно.",
+            wf.id,
+            wf.name,
+            tasks.len()
+        )));
+        for task in tasks {
+            let title: String = task.title.chars().take(28).collect();
+            self.state
+                .upsert_agent(&task.id, Some(title), AgentStatus::Pending, None);
+            self.supervisor.spawn(task, self.agent_tx.clone());
+        }
+    }
+
+    /// Делегировать задачу внешнему CLI-агенту (claude -p, codex exec, …) в фоне.
+    fn delegate_external(&mut self, agent_id: &str, prompt: &str) {
+        use whatcode_tools::external_agent::{all_agents, is_on_path};
+        let agent_id = agent_id.trim().to_lowercase();
+        let Some(spec) = all_agents(&self.external_agents)
+            .into_iter()
+            .find(|a| a.id == agent_id)
+        else {
+            self.state.push_line(ChatLine::notice(format!(
+                "Неизвестный агент «{agent_id}». Список: /agents"
+            )));
+            return;
+        };
+        if !is_on_path(&spec.program) {
+            self.state.push_line(ChatLine::notice(format!(
+                "Агент «{}» не установлен (нет `{}` в PATH).",
+                spec.id, spec.program
+            )));
+            return;
+        }
+        self.state.push_line(ChatLine::notice(format!(
+            "Делегирую «{}» агенту {} ({})…",
+            preview(prompt),
+            spec.display,
+            spec.program
+        )));
+
+        let tx = self.backend_tx.clone();
+        let timeout = self.external_agents.timeout_seconds;
+        let prompt = prompt.to_string();
+        tokio::spawn(async move {
+            let mut args: Vec<String> = Vec::with_capacity(spec.base_args.len() + 1);
+            let mut substituted = false;
+            for a in &spec.base_args {
+                if a.contains("{prompt}") {
+                    args.push(a.replace("{prompt}", &prompt));
+                    substituted = true;
+                } else {
+                    args.push(a.clone());
+                }
+            }
+            if !substituted {
+                args.push(prompt.clone());
+            }
+            let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            let cwd = std::env::current_dir().ok();
+            let msg = match whatcode_tools::util::run_capture(
+                &spec.program,
+                &arg_refs,
+                cwd.as_deref(),
+                timeout,
+            )
+            .await
+            {
+                Ok(out) => Backend::Notice(format!(
+                    "[{} · {}]\n{}",
+                    spec.display,
+                    if out.success { "успех" } else { "ошибка" },
+                    out.combined
+                )),
+                Err(e) => Backend::Notice(format!("[{}] сбой: {e}", spec.display)),
+            };
+            let _ = tx.send(msg);
+        });
     }
 
     fn spawn_agent(&mut self, kind: &str, task_text: &str) {
