@@ -53,6 +53,7 @@ pub fn known_agents() -> Vec<AgentSpec> {
         AgentSpec::new("cursor", "Cursor Agent", "cursor-agent", &["-p"]),
         AgentSpec::new("amp", "Sourcegraph Amp", "amp", &["-x"]),
         AgentSpec::new("crush", "Charm Crush", "crush", &["run"]),
+        AgentSpec::new("grok", "Grok Build CLI (xAI)", "grok", &["-p"]),
     ]
 }
 
