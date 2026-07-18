@@ -23,6 +23,8 @@ impl PersonaColor {
     pub const HERTA_PURPLE: Self = Self::new(187, 154, 247);
     /// Жёлтый — персона Anis.
     pub const ANIS_YELLOW: Self = Self::new(249, 226, 122);
+    /// Бирюзовый (#39C5BB) — персона Hatsune Miku.
+    pub const MIKU_TEAL: Self = Self::new(57, 197, 187);
     /// Ледяной циан — резервный акцент WhatCode.
     pub const WHATCODE_CYAN: Self = Self::new(137, 221, 255);
 
@@ -105,6 +107,7 @@ fn all_personas() -> Vec<Box<dyn Persona>> {
     vec![
         Box::new(super::herta::Herta),
         Box::new(super::anis::Anis),
+        Box::new(super::miku::Miku),
     ]
 }
 
@@ -253,6 +256,7 @@ mod tests {
     fn registry_returns_known_personas() {
         assert_eq!(get("herta").id(), "herta");
         assert_eq!(get("anis").id(), "anis");
+        assert_eq!(get("miku").id(), "miku");
         assert_eq!(get("unknown").id(), "default");
     }
 
