@@ -1,0 +1,37 @@
+//! `whatcode-tools` — фреймворк вызова инструментов и встроенные инструменты.
+//!
+//! Каждый инструмент реализует async-трейт [`Tool`]. [`ToolRegistry`] хранит их,
+//! отдаёт схемы модели и диспетчеризует вызовы, отклоняя деструктивные действия.
+//! [`build_registry`] собирает полный набор по конфигурации.
+
+#![forbid(unsafe_code)]
+
+pub mod build_tools;
+pub mod builder;
+pub mod code_tools;
+pub mod external_agent;
+pub mod fs_tools;
+pub mod git;
+pub mod http_tool;
+
+// Re-export git tools for backward compatibility.
+pub use git::advanced::*;
+pub use git::read::*;
+pub use git::write::*;
+pub mod memory_tools;
+pub mod proc_tool;
+pub mod registry;
+pub mod safety;
+pub mod skills;
+pub mod system_actions;
+pub mod time_tool;
+pub mod toolchain;
+pub mod util;
+pub mod web_search;
+
+pub use builder::build_registry;
+pub use external_agent::{
+    availability_report as external_agents_report, detect as detect_external_agents,
+};
+pub use registry::{Tool, ToolRegistry};
+pub use skills::SkillLibrary;

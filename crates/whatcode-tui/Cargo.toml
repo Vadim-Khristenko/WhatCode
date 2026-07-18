@@ -1,0 +1,20 @@
+[package]
+name = "whatcode-tui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Modern ratatui/crossterm TUI for WhatCode with live sub-agent panel"
+
+[dependencies]
+whatcode-core.workspace = true
+whatcode-llm.workspace = true
+whatcode-tools.workspace = true
+whatcode-agent.workspace = true
+whatcode-voice.workspace = true
+tokio.workspace = true
+ratatui.workspace = true
+crossterm.workspace = true
+futures.workspace = true
+tracing.workspace = true

@@ -14,7 +14,7 @@ from piper import PiperVoice
 
 from audio.output import SpeakerOutput
 from config import AudioOutputConfig, RvcTTSConfig
-from tools.herta_rvc_tts import (
+from tools.whatcode_rvc_tts import (
     DEFAULT_SILERO_REPO,
     find_index_path,
     load_silero_tts,
@@ -329,10 +329,10 @@ class RvcTTSEngine:
             raise FileNotFoundError(f'Applio Python was not found: {self.applio_python}')
 
         started_at = time.perf_counter()
-        with tempfile.TemporaryDirectory(prefix='herta_rvc_tts_') as temp_dir:
+        with tempfile.TemporaryDirectory(prefix='whatcode_rvc_tts_') as temp_dir:
             temp_path = Path(temp_dir)
             base_wav = temp_path / 'silero_base.wav'
-            rvc_wav = temp_path / 'herta_rvc.wav'
+            rvc_wav = temp_path / 'whatcode_rvc.wav'
 
             print(f'(синтез базового голоса {self.config.base_tts}...)', flush=True)
             base_tts_started_at = time.perf_counter()

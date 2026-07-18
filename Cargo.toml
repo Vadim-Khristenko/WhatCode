@@ -1,35 +1,35 @@
-# The Herta — Rust workspace.
-# Полный порт голосового ассистента «Великая Герта» на Rust.
-# Архитектура — модульная, как марионетки Герты: каждый crate автономен и заменяем.
+# WhatCode — Rust workspace.
+# Мощный ассистент для разработки с персонажной подачей (WhatCode).
+# Архитектура — модульная: каждый crate автономен и заменяем.
 [workspace]
 resolver = "2"
 members = [
-    "crates/herta-core",
-    "crates/herta-llm",
-    "crates/herta-tools",
-    "crates/herta-agent",
-    "crates/herta-voice",
-    "crates/herta-tui",
-    "crates/herta-cli",
+    "crates/whatcode-core",
+    "crates/whatcode-llm",
+    "crates/whatcode-tools",
+    "crates/whatcode-agent",
+    "crates/whatcode-voice",
+    "crates/whatcode-tui",
+    "crates/whatcode-cli",
 ]
 
 [workspace.package]
-version = "0.5.0"
+version = "0.7.0"
 edition = "2021"
 rust-version = "1.82"
 license = "MIT"
 authors = ["VAI PROG <vadim@vai-rice.space>"]
-repository = "https://github.com/vadim-khristenko/the-herta-voiceassistant-pwd-by-rust"
-description = "The Herta — hyper-performant Rust voice assistant & TUI (Honkai: Star Rail persona)"
+repository = "https://github.com/vadim-khristenko/WhatCode"
+description = "WhatCode — hyper-performant Rust coding assistant & TUI with selectable personas"
 
 [workspace.dependencies]
 # Внутренние crate-ы.
-herta-core = { path = "crates/herta-core" }
-herta-llm = { path = "crates/herta-llm" }
-herta-tools = { path = "crates/herta-tools" }
-herta-agent = { path = "crates/herta-agent" }
-herta-voice = { path = "crates/herta-voice" }
-herta-tui = { path = "crates/herta-tui" }
+whatcode-core = { path = "crates/whatcode-core" }
+whatcode-llm = { path = "crates/whatcode-llm" }
+whatcode-tools = { path = "crates/whatcode-tools" }
+whatcode-agent = { path = "crates/whatcode-agent" }
+whatcode-voice = { path = "crates/whatcode-voice" }
+whatcode-tui = { path = "crates/whatcode-tui" }
 
 # Async runtime и сеть.
 tokio = { version = "1.43", features = ["rt-multi-thread", "macros", "sync", "time", "process", "io-util", "fs", "signal"] }

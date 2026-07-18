@@ -15,7 +15,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  BIN_NAME: herta
+  BIN_NAME: whatcode
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -40,7 +40,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.version }}
-          name: The Herta ${{ steps.version.outputs.version }}
+          name: WhatCode ${{ steps.version.outputs.version }}
           draft: true
           generate_release_notes: true
 
@@ -136,15 +136,15 @@ jobs:
       - name: Install cargo-deb
         run: cargo install cargo-deb --locked
       - name: Build .deb
-        run: cargo deb -p herta-cli --output target/debian/herta.deb
+        run: cargo deb -p whatcode-cli --output target/debian/whatcode.deb
       - name: Rename with version
         run: |
-          mv target/debian/herta.deb "herta_${{ needs.create-release.outputs.version }}_amd64.deb"
+          mv target/debian/whatcode.deb "whatcode_${{ needs.create-release.outputs.version }}_amd64.deb"
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.create-release.outputs.version }}
-          files: herta_${{ needs.create-release.outputs.version }}_amd64.deb
+          tag_name: ${{ steps.version.outputs.version }}
+          files: whatcode_${{ needs.create-release.outputs.version }}_amd64.deb
 
   # ---------------------------------------------------------------------------
   # 4. Arch Linux: генерируем PKGBUILD/.SRCINFO и (опционально) публикуем в AUR.
@@ -177,7 +177,7 @@ jobs:
         if: ${{ env.AUR_KEY != '' }}
         uses: KSXGitHub/github-actions-deploy-aur@v3
         with:
-          pkgname: herta-voiceassistant-bin
+          pkgname: whatcode-bin
           pkgbuild: ./PKGBUILD
           commit_username: VAI PROG
           commit_email: vadim@vai-rice.space

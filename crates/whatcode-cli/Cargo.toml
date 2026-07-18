@@ -1,0 +1,40 @@
+[package]
+name = "whatcode-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "WhatCode — command-line entry point"
+
+[[bin]]
+name = "whatcode"
+path = "src/main.rs"
+
+[dependencies]
+whatcode-core.workspace = true
+whatcode-llm.workspace = true
+whatcode-tools.workspace = true
+whatcode-agent.workspace = true
+whatcode-voice.workspace = true
+whatcode-tui.workspace = true
+tokio.workspace = true
+clap.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+
+# Метаданные для `cargo deb` (Debian/Ubuntu пакет).
+[package.metadata.deb]
+name = "whatcode"
+maintainer = "VAI PROG <vadim@vai-rice.space>"
+copyright = "2026, VAI PROG <vadim@vai-rice.space>"
+license-file = ["../../LICENSE", "0"]
+extended-description = "WhatCode — высокопроизводительный ассистент для разработки и TUI на Rust с персонажами."
+section = "utils"
+priority = "optional"
+assets = [
+    ["target/release/whatcode", "usr/bin/", "755"],
+    ["../../README.md", "usr/share/doc/whatcode/README.md", "644"],
+    ["../../.env.example", "usr/share/doc/whatcode/env.example", "644"],
+]
