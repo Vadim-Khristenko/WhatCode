@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to build (e.g. v0.7.0)"
+        description: "Tag to build (e.g. v0.7.2)"
         required: true
 
 permissions:
@@ -24,40 +24,26 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1. Черновик релиза, к которому остальные джобы прикрепляют артефакты.
+  # 0. Разрешаем версию один раз для всех джобов.
   # ---------------------------------------------------------------------------
-  create-release:
-    name: Create GitHub release
+  meta:
+    name: Resolve version
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.version }}
+      version: ${{ steps.v.outputs.version }}
     steps:
-      - uses: actions/checkout@v7
-      - name: Resolve version
-        id: version
+      - id: v
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            version="${{ github.event.inputs.tag }}"
-          else
-            version="${GITHUB_REF_NAME}"
-          fi
+          version="${{ github.event.inputs.tag || github.ref_name }}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "## 🚀 WhatCode $version" >> "$GITHUB_STEP_SUMMARY"
-          echo "Собираю артефакты для релиза \`$version\`." >> "$GITHUB_STEP_SUMMARY"
-      - name: Create release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: WhatCode ${{ steps.version.outputs.version }}
-          draft: true
-          generate_release_notes: true
 
   # ---------------------------------------------------------------------------
-  # 2. Сборка бинарей под десктоп-платформы и заливка архивов в релиз.
+  # 1. Десктоп-бинари. Каждый таргет кладёт архив как build-artifact (без гонок).
   # ---------------------------------------------------------------------------
   build:
     name: build ${{ matrix.target }}
-    needs: create-release
+    needs: meta
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -65,20 +51,15 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            archive: tar.gz
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            archive: tar.gz
             cross: true
           - os: macos-latest
             target: x86_64-apple-darwin
-            archive: tar.gz
           - os: macos-latest
             target: aarch64-apple-darwin
-            archive: tar.gz
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            archive: zip
     steps:
       - uses: actions/checkout@v7
 
@@ -111,7 +92,7 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          staging="${BIN_NAME}-${{ needs.create-release.outputs.version }}-${{ matrix.target }}"
+          staging="${BIN_NAME}-${{ needs.meta.outputs.version }}-${{ matrix.target }}"
           mkdir -p "$staging"
           cp "target/${{ matrix.target }}/release/${BIN_NAME}" "$staging/"
           cp README.md LICENSE .env.example "$staging/" 2>/dev/null || true
@@ -124,7 +105,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $staging = "$env:BIN_NAME-${{ needs.create-release.outputs.version }}-${{ matrix.target }}"
+          $staging = "$env:BIN_NAME-${{ needs.meta.outputs.version }}-${{ matrix.target }}"
           New-Item -ItemType Directory -Force -Path $staging | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/$env:BIN_NAME.exe" $staging
           Copy-Item README.md, LICENSE, .env.example $staging -ErrorAction SilentlyContinue
@@ -133,18 +114,19 @@ jobs:
           $size = "{0:N1} MB" -f ((Get-Item "target/${{ matrix.target }}/release/$env:BIN_NAME.exe").Length / 1MB)
           "- ✅ ``${{ matrix.target }}`` — $size" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v5
         with:
-          tag_name: ${{ needs.create-release.outputs.version }}
-          files: ${{ env.ASSET }}
+          name: dist-${{ matrix.target }}
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # 3. Android (aarch64) через NDK — не блокирует релиз.
+  # 2. Android (aarch64) через предустановленный NDK раннера — best-effort.
   # ---------------------------------------------------------------------------
   android:
     name: build android (aarch64)
-    needs: create-release
+    needs: meta
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -170,27 +152,29 @@ jobs:
       - name: Package
         shell: bash
         run: |
-          staging="${BIN_NAME}-${{ needs.create-release.outputs.version }}-aarch64-linux-android"
+          staging="${BIN_NAME}-${{ needs.meta.outputs.version }}-aarch64-linux-android"
           mkdir -p "$staging"
           cp "target/aarch64-linux-android/release/${BIN_NAME}" "$staging/"
           cp README.md LICENSE .env.example "$staging/" 2>/dev/null || true
           tar czf "$staging.tar.gz" "$staging"
           echo "ASSET=$staging.tar.gz" >> "$GITHUB_ENV"
           size=$(du -h "target/aarch64-linux-android/release/${BIN_NAME}" | cut -f1)
-          echo "- ✅ \`aarch64-linux-android\` — $size" >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
+          echo "- ✅ \`aarch64-linux-android\` — $size (бинарь для Termux)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v5
         with:
-          tag_name: ${{ needs.create-release.outputs.version }}
-          files: ${{ env.ASSET }}
+          name: dist-android
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # 4. Debian / Ubuntu .deb через cargo-deb.
+  # 3. Debian / Ubuntu .deb через cargo-deb.
   # ---------------------------------------------------------------------------
   debian:
     name: package .deb
-    needs: create-release
+    needs: meta
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
       - name: Install pinned Rust toolchain
@@ -206,27 +190,70 @@ jobs:
       - name: Install cargo-deb
         run: cargo install cargo-deb --locked
       - name: Build .deb
-        run: cargo deb -p whatcode-cli --output "whatcode_${{ needs.create-release.outputs.version }}_amd64.deb"
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
+        run: cargo deb -p whatcode-cli --output "whatcode_${{ needs.meta.outputs.version }}_amd64.deb"
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v5
         with:
-          tag_name: ${{ needs.create-release.outputs.version }}
-          files: whatcode_${{ needs.create-release.outputs.version }}_amd64.deb
+          name: dist-deb
+          path: whatcode_${{ needs.meta.outputs.version }}_amd64.deb
+          if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # 5. Arch Linux: PKGBUILD и (опционально) публикация в AUR.
+  # 4. Единая публикация: собираем все артефакты и создаём релиз ОДИН раз.
+  #    Так исключены гонки параллельных upload'ов в один черновик.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish release
+    needs: [meta, build, android, debian]
+    if: ${{ always() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: dist
+          pattern: dist-*
+          merge-multiple: true
+      - name: List collected assets
+        run: |
+          echo "Собранные артефакты:"
+          find dist -type f | sort
+      - name: Create release with all assets
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.meta.outputs.version }}
+          name: WhatCode ${{ needs.meta.outputs.version }}
+          draft: true
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.deb
+      - name: Summary
+        run: |
+          {
+            echo "## 📦 Прикреплено к релизу ${{ needs.meta.outputs.version }}"
+            for f in dist/*.tar.gz dist/*.zip dist/*.deb; do
+              [ -f "$f" ] && echo "- $(basename "$f")"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # 5. Arch Linux: PKGBUILD и (опционально) публикация в AUR. Не блокирует релиз.
   # ---------------------------------------------------------------------------
   arch-aur:
     name: Arch AUR PKGBUILD
-    needs: [create-release, build]
+    needs: [meta, build]
     runs-on: ubuntu-latest
+    continue-on-error: true
     env:
       AUR_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v7
       - name: Render PKGBUILD
         run: |
-          version="${{ needs.create-release.outputs.version }}"
+          version="${{ needs.meta.outputs.version }}"
           version_clean="${version#v}"
           tarball="${BIN_NAME}-${version}-x86_64-unknown-linux-gnu.tar.gz"
           url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${version}/${tarball}"
@@ -235,28 +262,32 @@ jobs:
               packaging/aur/PKGBUILD.in > PKGBUILD
           cat PKGBUILD
       - name: Upload PKGBUILD artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: aur-pkgbuild
           path: PKGBUILD
       - name: Publish to AUR
+        # Публикуем только при наличии секрета. Экшен пиннится ТОЧНОЙ версией:
+        # у github-actions-deploy-aur нет плавающих мажорных тегов (@v3/@v4),
+        # поэтому ссылка вида @v4 приводит к «action not found».
         if: ${{ env.AUR_KEY != '' }}
-        uses: KSXGitHub/github-actions-deploy-aur@v4
+        uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
         with:
           pkgname: whatcode-bin
           pkgbuild: ./PKGBUILD
           commit_username: VAI PROG
           commit_email: vadim@vai-rice.space
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: "Update to ${{ needs.create-release.outputs.version }}"
+          commit_message: "Update to ${{ needs.meta.outputs.version }}"
 
   # ---------------------------------------------------------------------------
   # 6. NixOS: проверяем, что flake собирается.
   # ---------------------------------------------------------------------------
   nix:
     name: Nix build
-    needs: create-release
+    needs: meta
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31
@@ -271,27 +302,24 @@ jobs:
   release-summary:
     name: Release summary
     if: always()
-    needs: [create-release, build, android, debian, arch-aur, nix]
+    needs: [meta, build, android, debian, publish, arch-aur, nix]
     runs-on: ubuntu-latest
     steps:
       - name: Report
         run: |
-          v="${{ needs.create-release.outputs.version }}"
           {
-            echo "## 📦 Итог релиза $v"
+            echo "## 📋 Итог релиза ${{ needs.meta.outputs.version }}"
             echo ""
             echo "| Джоб | Статус |"
             echo "|------|--------|"
             echo "| desktop-бинари | ${{ needs.build.result }} |"
             echo "| android | ${{ needs.android.result }} |"
             echo "| .deb | ${{ needs.debian.result }} |"
-            echo "| AUR PKGBUILD | ${{ needs.arch-aur.result }} |"
+            echo "| публикация релиза | ${{ needs.publish.result }} |"
+            echo "| AUR | ${{ needs.arch-aur.result }} |"
             echo "| Nix | ${{ needs.nix.result }} |"
-            echo ""
-            echo "Черновик релиза создан; проверьте артефакты на странице Releases."
           } >> "$GITHUB_STEP_SUMMARY"
-          # Гейтом релиза считаем обязательные desktop-бинари.
-          if [ "${{ needs.build.result }}" != "success" ]; then
-            echo "::error::сборка desktop-бинарей провалилась"
+          if [ "${{ needs.build.result }}" != "success" ] || [ "${{ needs.publish.result }}" != "success" ]; then
+            echo "::error::публикация релиза не удалась"
             exit 1
           fi
