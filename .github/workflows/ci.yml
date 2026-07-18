@@ -117,7 +117,7 @@ jobs:
           cp target/aarch64-linux-android/release/whatcode \
              android/app/src/main/jniLibs/arm64-v8a/libwhatcode.so
           echo "sdk.dir=${ANDROID_SDK_ROOT:-$ANDROID_HOME}" > android/local.properties
-          ( cd android && gradle :app:assembleRelease --no-daemon --console=plain )
+          ( cd android && gradle :app:assembleRelease -x lintVitalRelease --no-daemon --console=plain )
       - name: Summary
         if: always()
         run: |

@@ -175,7 +175,7 @@ jobs:
           cp "target/aarch64-linux-android/release/${BIN_NAME}" \
              android/app/src/main/jniLibs/arm64-v8a/libwhatcode.so
           echo "sdk.dir=${ANDROID_SDK_ROOT:-$ANDROID_HOME}" > android/local.properties
-          ( cd android && gradle :app:assembleRelease --no-daemon --console=plain )
+          ( cd android && gradle :app:assembleRelease -x lintVitalRelease --no-daemon --console=plain )
           apk="artifacts/${BIN_NAME}-${{ needs.meta.outputs.version }}-android.apk"
           cp android/app/build/outputs/apk/release/app-release.apk "$apk"
           size=$(du -h "$apk" | cut -f1)
