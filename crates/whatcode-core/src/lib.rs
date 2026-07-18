@@ -19,6 +19,7 @@ pub mod memory;
 pub mod message;
 pub mod mode;
 pub mod persona;
+pub mod settings;
 pub mod skill;
 pub mod tool;
 pub mod wakeword;
@@ -30,6 +31,7 @@ pub use long_memory::{Fact, FactCategory, FactSource, LongMemoryStore};
 pub use memory::DialogueMemory;
 pub use message::{estimate_tokens, estimate_total_tokens, Message, Role};
 pub use mode::{AgentMode, Permission, PermissionLedger, Policy, ToolRisk};
+pub use settings::{handle_command as handle_settings_command, Settings, SettingsOutcome};
 pub use skill::{load_dir as load_skills, Skill};
 pub use tool::{ParamType, ToolCall, ToolParameter, ToolResult, ToolSpec};
 

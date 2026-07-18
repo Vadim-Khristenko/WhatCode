@@ -120,19 +120,21 @@ async fn run_tui(config: AppConfig) -> anyhow::Result<()> {
         ctx_manager,
         voice,
         stt,
-        config.context.max_tokens,
-        config.agent.tool_loop_iterations,
-        config.recap_enabled,
-        config.recap_every_turns,
         mem_block,
-        config.persona.clone(),
-        config.external_agents.clone(),
+        config,
     );
     app.run().await?;
     Ok(())
 }
 
 async fn run_oneshot(config: &AppConfig, prompt: &str) -> anyhow::Result<()> {
+    // Команды настроек (`/set`, `/unset`, `/config`) обрабатываем без модели —
+    // так конфигурацию можно задавать там, где нет переменных окружения (Android).
+    if let Some(outcome) = whatcode_core::handle_settings_command(prompt) {
+        println!("{}", outcome.message);
+        return Ok(());
+    }
+
     let selected_persona = persona::common::get(&config.persona);
 
     // Быстрый ответ об идентичности без модели и без сети.

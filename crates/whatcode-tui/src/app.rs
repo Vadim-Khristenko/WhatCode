@@ -71,10 +71,12 @@ pub struct App {
     agent_rx: mpsc::UnboundedReceiver<AgentEvent>,
     /// Активная персона (динамически выбирается через /persona).
     persona: Box<dyn Persona>,
-    /// Конфиг внешних агентов (для /agents и /delegate).
-    external_agents: whatcode_core::config::ExternalAgentsConfig,
     /// Реестр мульти-агентных воркфлоу (встроенные + пользовательские TOML).
     workflows: whatcode_agent::WorkflowRegistry,
+    /// Полная конфигурация (для live-пересборки клиента через /set).
+    config: whatcode_core::AppConfig,
+    /// Блок долговременной памяти (для пересборки диалога при смене персоны).
+    long_memory_block: Option<String>,
 }
 
 impl App {
@@ -86,16 +88,14 @@ impl App {
         ctx_manager: ContextManager,
         voice: Voice,
         stt: Stt,
-        context_limit: usize,
-        tool_iterations: usize,
-        recap_enabled: bool,
-        recap_every_turns: u32,
         long_memory_block: Option<String>,
-        persona_id: impl Into<String>,
-        external_agents: whatcode_core::config::ExternalAgentsConfig,
+        config: whatcode_core::AppConfig,
     ) -> Self {
-        let persona_id = persona_id.into().to_lowercase();
-        let persona = persona::common::get(&persona_id);
+        let persona = persona::common::get(&config.persona.to_lowercase());
+        let context_limit = config.context.max_tokens;
+        let tool_iterations = config.agent.tool_loop_iterations.max(1);
+        let recap_enabled = config.recap_enabled;
+        let recap_every_turns = config.recap_every_turns.max(1);
 
         let provider = client.provider_name().to_string();
         let model = client.model_name().to_string();
@@ -125,9 +125,9 @@ impl App {
             stt,
             conversation,
             goal: None,
-            tool_iterations: tool_iterations.max(1),
+            tool_iterations,
             recap_enabled,
-            recap_every_turns: recap_every_turns.max(1),
+            recap_every_turns,
             turns_since_recap: 0,
             show_help: false,
             backend_tx,
@@ -135,8 +135,9 @@ impl App {
             agent_tx,
             agent_rx,
             persona,
-            external_agents,
             workflows: whatcode_agent::WorkflowRegistry::load(),
+            config,
+            long_memory_block,
         }
     }
 
@@ -413,20 +414,17 @@ impl App {
                         self.persona.id()
                     )));
                 } else {
-                    let new = persona::common::get(tail);
-                    let name = new.display_name().to_string();
-                    self.persona = new;
-                    self.theme = Theme::from_persona_color(self.persona.color());
-                    self.state.persona_name = name.clone();
-                    self.state.push_line(ChatLine::notice(format!(
-                        "Персона переключена: {name}. Новый цвет и тон применены."
-                    )));
-                    // Пересоздаём системный промпт с новой персоной.
-                    // История пользовательских сообщений сохраняется отдельно в текущем сеансе.
-                    self.conversation = self
-                        .persona
-                        .bootstrap_messages(Some(&self.state.model_label), None);
-                    self.state.context_used = estimate_total_tokens(&self.conversation);
+                    self.apply_persona(tail);
+                }
+            }
+            "set" | "unset" | "config" | "settings" | "get" => {
+                if let Some(outcome) =
+                    whatcode_core::handle_settings_command(&format!("/{command}"))
+                {
+                    self.state.push_line(ChatLine::notice(outcome.message));
+                    if outcome.needs_client_rebuild {
+                        self.reload_config_and_rebuild();
+                    }
                 }
             }
             "allow" => {
@@ -474,7 +472,7 @@ impl App {
                 }
             }
             "agents" => {
-                let report = whatcode_tools::external_agents_report(&self.external_agents);
+                let report = whatcode_tools::external_agents_report(&self.config.external_agents);
                 self.state.push_line(ChatLine::notice(format!(
                     "Внешние агенты (Agent Context Protocol). Делегирование: /delegate <id> <задача>\n{report}"
                 )));
@@ -534,6 +532,64 @@ impl App {
         }
     }
 
+    /// Переключить активную персону: цвет, тон, системный промпт.
+    fn apply_persona(&mut self, id: &str) {
+        let new = persona::common::get(id);
+        let name = new.display_name().to_string();
+        self.persona = new;
+        self.theme = Theme::from_persona_color(self.persona.color());
+        self.state.persona_name = name.clone();
+        self.state.push_line(ChatLine::notice(format!(
+            "Персона переключена: {name}. Новый цвет и тон применены."
+        )));
+        self.conversation = self.persona.bootstrap_messages(
+            Some(&self.state.model_label),
+            self.long_memory_block.as_deref(),
+        );
+        self.state.context_used = estimate_total_tokens(&self.conversation);
+    }
+
+    /// Перечитать конфиг (после /set), применить персону/режим и пересобрать клиента.
+    fn reload_config_and_rebuild(&mut self) {
+        let old_persona = self.config.persona.clone();
+        self.config = whatcode_core::AppConfig::from_env();
+        if self.config.persona != old_persona {
+            let id = self.config.persona.clone();
+            self.apply_persona(&id);
+        }
+        self.registry.set_mode(self.config.mode);
+        self.state.mode_label = self.config.mode.as_str().to_string();
+        self.rebuild_client();
+    }
+
+    /// Пересобрать LLM-клиента и супервизора из текущего конфига (live /set).
+    fn rebuild_client(&mut self) {
+        match whatcode_llm::build_client(&self.config) {
+            Ok(c) => {
+                let client: Arc<dyn ChatClient> = Arc::from(c);
+                self.state.provider_label = client.provider_name().to_string();
+                self.state.model_label = client.model_name().to_string();
+                self.supervisor = Supervisor::new(
+                    Arc::clone(&client),
+                    &self.config.agent,
+                    self.persona.system_prompt(Some(client.model_name())),
+                );
+                let warm = Arc::clone(&client);
+                tokio::spawn(async move {
+                    let _ = warm.warm_up().await;
+                });
+                self.client = client;
+                self.state.push_line(ChatLine::notice(format!(
+                    "LLM-клиент пересобран: {} · {}",
+                    self.state.provider_label, self.state.model_label
+                )));
+            }
+            Err(e) => self.state.push_line(ChatLine::error(format!(
+                "не удалось пересобрать клиент: {e}"
+            ))),
+        }
+    }
+
     /// Запустить воркфлоу: producers (веер) → синтез → опц. проверка, в фоне.
     fn run_workflow(&mut self, id: &str, input: &str) {
         let Some(spec) = self.workflows.find(id).cloned() else {
@@ -573,7 +629,7 @@ impl App {
     fn delegate_external(&mut self, agent_id: &str, prompt: &str) {
         use whatcode_tools::external_agent::{all_agents, is_on_path};
         let agent_id = agent_id.trim().to_lowercase();
-        let Some(spec) = all_agents(&self.external_agents)
+        let Some(spec) = all_agents(&self.config.external_agents)
             .into_iter()
             .find(|a| a.id == agent_id)
         else {
@@ -597,7 +653,7 @@ impl App {
         )));
 
         let tx = self.backend_tx.clone();
-        let timeout = self.external_agents.timeout_seconds;
+        let timeout = self.config.external_agents.timeout_seconds;
         let prompt = prompt.to_string();
         tokio::spawn(async move {
             let mut args: Vec<String> = Vec::with_capacity(spec.base_args.len() + 1);

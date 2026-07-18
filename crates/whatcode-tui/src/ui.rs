@@ -351,6 +351,14 @@ pub fn render_help(frame: &mut Frame, theme: &Theme) {
             theme.dim(),
         )),
         Line::from(Span::styled(
+            "/set <ключ> <знач>  конфиг: provider|model|api_key|base_url|persona|mode",
+            theme.dim(),
+        )),
+        Line::from(Span::styled(
+            "/config /unset <ключ>  показать / сбросить настройки",
+            theme.dim(),
+        )),
+        Line::from(Span::styled(
             "/tools          список инструментов",
             theme.dim(),
         )),

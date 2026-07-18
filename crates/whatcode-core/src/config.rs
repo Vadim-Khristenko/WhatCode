@@ -873,6 +873,10 @@ impl AppConfig {
                 .unwrap_or_default(),
         };
 
+        // Персистентные настройки из файла (`/set`) имеют приоритет над окружением:
+        // это единственный способ конфигурации там, где нет env (Android).
+        crate::settings::Settings::load().apply_to(&mut cfg);
+
         cfg
     }
 
@@ -886,6 +890,46 @@ impl AppConfig {
             LlmProvider::OpenCodeGo => &self.opencode_go.model,
             LlmProvider::GoogleAi => &self.google_ai.model,
             LlmProvider::Anthropic => &self.anthropic.model,
+        }
+    }
+
+    /// Задать модель активного провайдера.
+    pub fn set_active_model(&mut self, model: String) {
+        match self.llm_provider {
+            LlmProvider::Ollama => self.ollama.model = model,
+            LlmProvider::Cerebras => self.cerebras.model = model,
+            LlmProvider::DeepSeek => self.deepseek.model = model,
+            LlmProvider::Fireworks => self.fireworks.model = model,
+            LlmProvider::OpenCodeGo => self.opencode_go.model = model,
+            LlmProvider::GoogleAi => self.google_ai.model = model,
+            LlmProvider::Anthropic => self.anthropic.model = model,
+        }
+    }
+
+    /// Задать API-ключ активного провайдера (Ollama ключ не использует).
+    pub fn set_active_api_key(&mut self, key: String) {
+        let k = Some(key);
+        match self.llm_provider {
+            LlmProvider::Ollama => {}
+            LlmProvider::Cerebras => self.cerebras.api_key = k,
+            LlmProvider::DeepSeek => self.deepseek.api_key = k,
+            LlmProvider::Fireworks => self.fireworks.api_key = k,
+            LlmProvider::OpenCodeGo => self.opencode_go.api_key = k,
+            LlmProvider::GoogleAi => self.google_ai.api_key = k,
+            LlmProvider::Anthropic => self.anthropic.api_key = k,
+        }
+    }
+
+    /// Задать базовый URL/хост активного провайдера.
+    pub fn set_active_base_url(&mut self, url: String) {
+        match self.llm_provider {
+            LlmProvider::Ollama => self.ollama.host = url,
+            LlmProvider::Cerebras => self.cerebras.base_url = url,
+            LlmProvider::DeepSeek => self.deepseek.base_url = url,
+            LlmProvider::Fireworks => self.fireworks.base_url = url,
+            LlmProvider::OpenCodeGo => self.opencode_go.base_url = url,
+            LlmProvider::GoogleAi => self.google_ai.base_url = url,
+            LlmProvider::Anthropic => self.anthropic.base_url = url,
         }
     }
 }
