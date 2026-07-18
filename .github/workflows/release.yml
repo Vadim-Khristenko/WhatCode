@@ -161,16 +161,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: android-release
-      - name: Set up Android NDK
-        id: ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r27c
-          local-cache: true
-      - name: Build for Android
-        env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
-        run: ./scripts/build-android.sh
+      - name: Build for Android (runner NDK)
+        shell: bash
+        run: |
+          export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$ANDROID_NDK_LATEST_HOME}"
+          echo "::notice::Using preinstalled NDK at $ANDROID_NDK_HOME"
+          ./scripts/build-android.sh
       - name: Package
         shell: bash
         run: |
