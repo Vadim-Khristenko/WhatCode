@@ -97,9 +97,27 @@ whatcode-cli ── (всё)
 | `debug` | гипотезы о причине, воспроизведение, стратегия фикса |
 
 **Agent Context Protocol** — делегирование другим CLI-агентам. `/agents` показывает,
-какие установлены (`claude`, `codex`, `gemini`, `qwen`, `opencode`, `cursor`, `amp`, `crush`),
+какие установлены (`claude`, `codex`, `gemini`, `qwen`, `opencode`, `cursor`, `amp`, `crush`, `grok`),
 `/delegate <id> <задача>` запускает выбранного в фоне. Модель может делать это сама через
 инструмент `ask_external_agent`. Свои агенты добавляются через `WHATCODE_EXTERNAL_AGENTS_CUSTOM`.
+
+## Конфигурация командами (`/set`)
+
+Провайдера, модель, ключ и т.д. можно задавать прямо в строке ввода — это работает
+там, где нет переменных окружения (в частности, на Android):
+
+```text
+/set provider anthropic          # ollama | anthropic | google_ai | cerebras | deepseek | fireworks | opencode-go
+/set api_key sk-...              # ключ активного провайдера
+/set model claude-opus-4-8       # модель активного провайдера
+/set base_url https://...        # базовый URL/хост
+/set persona miku                # персона по умолчанию
+/config                          # показать сохранённые настройки
+/unset api_key                   # сбросить ключ
+```
+
+Настройки сохраняются в `~/.whatcode/settings.toml` (или `$WHATCODE_CONFIG`) и имеют
+приоритет над окружением. В TUI изменение провайдера/модели/ключа пересобирает клиента на лету.
 
 ## Android / Termux
 

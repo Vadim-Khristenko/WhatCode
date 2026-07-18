@@ -2,5 +2,11 @@
 <resources>
     <string name="app_name">WhatCode</string>
     <string name="hint_input">Спроси WhatCode…</string>
-    <string name="send">Отправить</string>
+    <string name="send">▶</string>
+    <string name="menu_provider">Провайдер и ключ</string>
+    <string name="menu_persona">Персона</string>
+    <string name="menu_help">Помощь</string>
+    <string name="menu_clear">Очистить</string>
+    <string name="dlg_save">Сохранить</string>
+    <string name="dlg_cancel">Отмена</string>
 </resources>
